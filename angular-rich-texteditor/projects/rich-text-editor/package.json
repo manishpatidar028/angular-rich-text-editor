@@ -1,0 +1,21 @@
+{
+  "name": "angular-rich-text-editor",
+  "version": "1.0.0",
+  "peerDependencies": {
+    "@angular/common": ">=17.0.0 <20.0.0",
+    "@angular/core": ">=17.0.0 <20.0.0",
+    "@angular/forms": ">=17.0.0 <20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manishpatidar028/angular-rich-text-editor"
+  },
+  "keywords": [
+    "angular",
+    "rich-text-editor",
+    "wysiwyg",
+    "text editor",
+    "form input"
+  ],
+  "license": "MIT"
+}
