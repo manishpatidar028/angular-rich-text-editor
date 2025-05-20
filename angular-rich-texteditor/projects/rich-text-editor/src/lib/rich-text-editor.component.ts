@@ -21,7 +21,16 @@ import {
 } from '@angular/forms';
 
 declare var RichTextEditor: any;
-
+/**
+ * Configuration options for the toolbar
+ */
+export interface RichTextEditorConfig {
+  height?: number;
+  width?: number | string;
+  toolbar?: string;
+  toolbar_custom?: string;
+  [key: string]: any;
+}
 @Component({
   selector: 'lib-rich-text-editor',
   template: `
@@ -60,13 +69,23 @@ export class RichTextEditorComponent
 {
   @ViewChild('editorContainer', { static: true }) editorContainer!: ElementRef;
   @Input() licenseKey: string = '';
-  @Input() config: any = {};
+  @Input() config: RichTextEditorConfig = {};
 
   @Input() imageUploadHandler: (file: File) => Promise<string> = async () => '';
 
   @Input() errorMessages: { [key: string]: string } = {
     required: 'This field is required.',
   };
+
+    /**
+   * Enable or disable image upload functionality
+   */
+  @Input() enableImageUpload: boolean = false;
+  
+  /**
+   * Enable or disable video embed functionality
+   */
+  @Input() enableVideoEmbed: boolean = false;
 
   private editorInstance: any;
   private value: string = '';
@@ -102,13 +121,9 @@ export class RichTextEditorComponent
   }
 
   private initEditor() {
-    const fullConfig = {
-      license: this.licenseKey,
-      ...this.config,
-      content_changed_callback: () => {
-        this.fixCharacterCount();
-      },
-    };
+    // Prepare the final configuration with our custom settings
+    const fullConfig = this.prepareConfiguration();
+    this._applyCustomStyles();
 
     this.editorInstance = new RichTextEditor(
       this.editorContainer.nativeElement,
@@ -144,6 +159,8 @@ export class RichTextEditorComponent
         }
 
         if (prevValue && cleaned.length === 0) {
+          const control = this.ngControl?.control;
+          console.log(control);
           console.log('[RTE] Full clear detected after initial value');
         }
       }, 150);
@@ -169,16 +186,17 @@ export class RichTextEditorComponent
 
   writeValue(value: any): void {
     const incomingValue = value || '';
-    this.value = incomingValue;
+    this.value =  incomingValue ;
     this.wasInitialValueSet = true;
 
+    console.log(incomingValue);
     if (this.editorInstance) {
       const current = this.editorInstance.getHTMLCode() || '';
 
       // ✅ Only call setHTMLCode if content has *meaningfully* changed
       if (this.normalizeHtml(current) !== this.normalizeHtml(incomingValue)) {
         this.isSystemUpdate = true;
-        this.editorInstance.setHTMLCode(incomingValue);
+        this.editorInstance.setHTMLCode( incomingValue );
       }
     }
   }
@@ -212,6 +230,11 @@ export class RichTextEditorComponent
     }
   }
 
+  hasRequiredValidator(control: AbstractControl | null): boolean {
+  if (!control || !control.validator) return false;
+  const result = control.validator({ value: null } as AbstractControl);
+  return !!(result && result['required']);
+}
   validate(control: AbstractControl): ValidationErrors | null {
     const value = control?.value || '';
     const isEmpty = this.isTrulyEmpty(value);
@@ -272,7 +295,7 @@ export class RichTextEditorComponent
   get showError(): boolean {
     this.getCharacterCount(); // debug
     return (
-      !!this.ngControl?.control?.invalid && !!this.ngControl?.control?.touched
+      (!!this.ngControl?.control?.invalid && !!this.ngControl?.control?.touched) || !!(this.ngControl?.control?.touched && this.value.length === 0)
     );
   }
 
@@ -311,5 +334,95 @@ export class RichTextEditorComponent
 
       doc.body.appendChild(rteScript);
     });
+  }
+
+     /**
+   * Prepare the final configuration for the editor instance
+   */
+  private prepareConfiguration(): any {
+    // Set default height if not specified
+    if (!this.config.height) {
+      this.config.height = 300;
+    }
+    
+    // Start with a base configuration that forces desktop mode
+    const enhancedConfig = {
+      ...this.config,
+      license: this.licenseKey,
+      content_changed_callback: () => {
+        this.fixCharacterCount();
+      },
+      enableObjectResizing: true,
+      enableImageUpload: this.enableImageUpload,
+      enableVideoEmbed: this.enableVideoEmbed,
+      
+      // Disable any automatic mobile detection/adjustments
+      forceDesktopMode: true,
+      disableMobileMode: true,
+      toolbarModeViewport: 'always-desktop',
+      showFloatingToolbar: false,
+      showBottomToolbar: false
+    };
+    
+    // If custom toolbar isn't specified, create one based on enabled features
+    if (!enhancedConfig.toolbar) {
+      const toolbarItems = ['bold', 'italic', 'underline', 'fontname', 'fontsize', 'forecolor', 'backcolor'];
+      
+      if (this.enableImageUpload) {
+        toolbarItems.push('insertimage');
+      }
+      
+      if (this.enableVideoEmbed) {
+        toolbarItems.push('insertvideo');
+      }
+      
+      toolbarItems.push('removeformat', 'undo', 'redo');
+      
+      enhancedConfig.toolbar = 'custom';
+      enhancedConfig.toolbar_custom = toolbarItems.join(',');
+    }
+    
+    return enhancedConfig;
+  }
+
+   /**
+   * Apply custom styles to improve mobile experience
+   */
+  private _applyCustomStyles() {
+    // Add a custom stylesheet to fix mobile issues if it doesn't exist yet
+    if (!document.getElementById('rte-consistent-toolbar-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'rte-consistent-toolbar-styles';
+      styleEl.innerHTML = `
+        /* Custom mobile styles to fix toolbar */
+        @media (max-width: 992px) {
+        .rte-toolbar-desktop,
+          .rte-toolbar {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            -webkit-overflow-scrolling: touch !important;
+            max-width: 100% !important;
+            padding: 4px 0 !important;
+          }
+          
+          .rte-toolbar button,
+          .rte-toolbar .rte-dropdown {
+            flex-shrink: 0 !important;
+            min-width: 28px !important;
+            height: 28px !important;
+            margin: 2px !important;
+          }
+          
+          /* Hide any mobile-specific UI the library might add */
+          .rte-toolbar-mobile,
+          .rte-mobile-menu-toggle {
+            display: none !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
   }
 }

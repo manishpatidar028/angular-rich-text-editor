@@ -23,7 +23,7 @@ RTE_DefaultConfig.tooltipAttribute = "rte-tooltip";    //change to "no-tooltip" 
 RTE_DefaultConfig.timeoutAddToUndo = 900; //When uses types fast, wait 900ms to add undo item.
 RTE_DefaultConfig.skin = "default";     // default, rounded-corner, gray or blue. Sets the skin for how the toolbar is draw. Create your custom skin or choose from predefined skins.
 RTE_DefaultConfig.toolbar = "default"; // default, basic or full. Auto configures the toolbar with a set of buttons on desktop.
-RTE_DefaultConfig.toolbarMobile = "mobile";   // The toolbar set on mobile devices. 
+RTE_DefaultConfig.toolbarMobile = "basic";   // The toolbar set on mobile devices. 
 RTE_DefaultConfig.maxWidthForMobile = 992; // When the screen (browser window) gets smaller than 992, editor should have mobile toolbar.
 
 RTE_DefaultConfig.urlType = "default";  //default(do nothing),absolute(all change to http(s)://...),relative(all change to /...)
@@ -197,7 +197,7 @@ RTE_DefaultConfig.subtoolbar_floatparagraph = "pmoveup,pmovedown,pduplicate,pdel
 RTE_DefaultConfig.controltoolbar_TEXT = "removeformat | {bold,italic,underline,forecolor,backcolor}|{fontname:toggle,fontsize:toggle}|{insertlink,insertanchor}"  // A set of buttons that appears in the text selection float toolbar.
 RTE_DefaultConfig.controltoolbar_A = "{linkstyle,insertlink,unlink}"; // A set of buttons that appears in the link selection float toolbar.
 RTE_DefaultConfig.controltoolbar_TD = "{tableheader,menu_tablecell,menu_tablerow,menu_tablecolumn,menu_table}";//"{menu_tablecell,menu_tableinsert,menu_tabledelete,menu_table}",
-RTE_DefaultConfig.controltoolbar_IMG = "{menu_controlsize,imagecaption,controlalt,controlinsertlink,controleditlink,controlopenlink,controlunlink}/{menu_controljustify,imagestyle,imageeditor,delete}";//justifyleft,justifycenter,justifyright
+RTE_DefaultConfig.controltoolbar_IMG = "{menu_controlsize,imagecaption,controlalt,controlinsertlink,controleditlink,controlopenlink,controlunlink}/{menu_controljustify,imagestyle,delete}";//justifyleft,justifycenter,justifyright
 
 //RTE_DefaultConfig.svgCode_menu_tablerow='<svg viewBox="0 0 20 20" fill="#5F6368"><path d="M10.21 15c2.106 0 3.412-1.087 3.412-2.823 0-1.306-.984-2.283-2.324-2.386v-.055a2.176 2.176 0 001.852-2.14c0-1.51-1.162-2.46-3.014-2.46H5.843V15h4.368zM7.908 6.674h1.696c.963 0 1.517.451 1.517 1.244 0 .834-.629 1.32-1.73 1.32H7.908V6.673zm0 6.788v-2.864h1.73c1.216 0 1.88.492 1.88 1.415 0 .943-.643 1.449-1.832 1.449H7.907z"/></svg>';
 RTE_DefaultConfig.pngCode_ribbonbg = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAABiCAYAAAB+koVqAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAACB0RVh0U29mdHdhcmUATWFjcm9tZWRpYSBGaXJld29ya3MgTVi7kSokAAAAFnRFWHRDcmVhdGlvbiBUaW1lADA1LzA2LzEynpvHdgAAAeNJREFUeJzt3bFtw0AUBcFP4/qv1InhRA4kOaAauE0IAjMVMFs8no46vn8e7wGATWtm5vfxvPo5ALiZNTPzfBkhAOxZMzPvt4AAsOcTkKsfA4C7OQNy9VMAcDteYQGQeIUFQCIgACSfMxAFAWCPBQJAIiAAJH6FBUCyZmZeVz8FALezZmYefz6mCMAeN9EBSL6ufgAA7klAAEgEBIBkzcwcVz8FALdjgQCQCAgAiYAAkKyZcQgCwDaH6AAkXmEBkAgIAIlXWAAkZ0AOCQFgj1dYACQCAkDiHggAiUN0ABILBIDEGQgAiYAAkDgDASCxQABIBASAREAASAQEgMQhOgCJi4QAJF5hAZBYIAAkFggAiYAAkAgIAImAAJCch+hO0QHYZIEAkAgIAIlPmQCQWCAAJJ+b6DYIAHssEAASAQEgERAAEgEBIBEQABL3QABILBAAEgEBIPGXtgAkFggAiQUCQGKBAJAICACJgACQCAgAiZvoACQWCACJBQJAYoEAkAgIAImAAJAICACJgACQCAgAiYAAkAgIAMl5kfBwlRCAPRYIAImAAJAICACJgACQrJnxOV4AtlkgACTnAjFBANhkgQCQCAgAib+0BSCxQABIBASAxD0QABILBIBEQABIBASA5B+/giW9vHXuqwAAAABJRU5ErkJggg==';

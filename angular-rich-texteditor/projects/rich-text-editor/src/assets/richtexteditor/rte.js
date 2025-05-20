@@ -23,7 +23,7 @@ RTE_DefaultConfig.tooltipAttribute = "rte-tooltip";    //change to "no-tooltip" 
 RTE_DefaultConfig.timeoutAddToUndo = 900; //When uses types fast, wait 900ms to add undo item.
 RTE_DefaultConfig.skin = "default";     // default, rounded-corner, gray or blue. Sets the skin for how the toolbar is draw. Create your custom skin or choose from predefined skins.
 RTE_DefaultConfig.toolbar = "default"; // default, basic or full. Auto configures the toolbar with a set of buttons on desktop.
-RTE_DefaultConfig.toolbarMobile = "mobile";   // The toolbar set on mobile devices. 
+RTE_DefaultConfig.toolbarMobile = "basic";   // The toolbar set on mobile devices. 
 RTE_DefaultConfig.maxWidthForMobile = 992; // When the screen (browser window) gets smaller than 992, editor should have mobile toolbar.
 
 RTE_DefaultConfig.urlType = "default";  //default(do nothing),absolute(all change to http(s)://...),relative(all change to /...)

@@ -4,8 +4,9 @@
   [config]="{
     height: 300,
     toolbar: 'mytoolbar',
-    toolbar_mytoolbar: '{bold,italic}|{fontname,fontsize}|{forecolor,backcolor}|removeformat#{undo,redo,fullscreenenter,fullscreenexit,togglemore}'
-  }"  [(ngModel)]="content"
+    toolbar_mytoolbar: toolbarGroup.FULL
+  }"  
+  [(ngModel)]="content"
    required
   [errorMessages]="{ required: 'Please enter a description.' }"
 ></lib-rich-text-editor>
@@ -13,3 +14,6 @@
 <hr />
 <h4>Output:</h4>
 <div [innerHTML]="content"></div>
+
+
+
