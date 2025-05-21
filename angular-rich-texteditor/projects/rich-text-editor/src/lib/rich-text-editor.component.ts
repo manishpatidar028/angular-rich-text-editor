@@ -17,8 +17,12 @@ import {
   Validator,
   AbstractControl,
   ValidationErrors,
-  Validators,
 } from '@angular/forms';
+import {
+  RTE_TOOLBAR_PRESETS,
+  RTEImageTool,
+  RTEPreset,
+} from './rich-text-editor.constant';
 
 declare var RichTextEditor: any;
 /**
@@ -71,17 +75,34 @@ export class RichTextEditorComponent
   @Input() licenseKey: string = '';
   @Input() config: RichTextEditorConfig = {};
 
-  @Input() imageUploadHandler: (file: File) => Promise<string> = async () => '';
+  @Input() rtePreset: RTEPreset | null = null;
+  @Input() imageToolbarItems: (RTEImageTool | '/')[] | null = null;
+  @Input() excludedToolbarItems: string[] = [];
 
   @Input() errorMessages: { [key: string]: string } = {
     required: 'This field is required.',
   };
 
-    /**
+  /**
+   * If provided, RichTextEditor will call this instead of its
+   * default image‐upload logic.
+   *
+   * Should call `callback(url)` on success, or
+   * `callback(null, errorCode)` on failure.
+   */
+  @Input()
+  fileUploadHandler: (
+    file: File,
+    callback: (url: string | null, errorCode?: string) => void,
+    optionalIndex?: number,
+    optionalFiles?: File[]
+  ) => void = () => {};
+
+  /**
    * Enable or disable image upload functionality
    */
   @Input() enableImageUpload: boolean = false;
-  
+
   /**
    * Enable or disable video embed functionality
    */
@@ -91,8 +112,6 @@ export class RichTextEditorComponent
   private value: string = '';
   private ngControl: NgControl | null = null;
   private changeTimer: any;
-  private isSystemUpdate = false;
-  private wasInitialValueSet = false;
 
   onChange = (value: any) => {};
   onTouched = () => {};
@@ -154,12 +173,21 @@ export class RichTextEditorComponent
         // ✅ Force validation cycle
         if (this.ngControl?.control) {
           const control = this.ngControl.control;
-          control.setValue(html, { emitEvent: false }); // don't double emit
+          const finalValue = this.isTrulyEmpty(html) ? '' : html;
+          control.setValue(finalValue, { emitEvent: false }); // don't double emit
           control.updateValueAndValidity();
         }
 
         if (prevValue && cleaned.length === 0) {
           const control = this.ngControl?.control;
+          if (control) {
+            console.log('[RTE] Full clear detected', control);
+
+            control.markAsTouched(); // Triggers UI error display
+            control.updateValueAndValidity(); // Forces validator re-run
+          }
+          this.editorInstance.setHTMLCode('<p><br></p>');
+
           console.log(control);
           console.log('[RTE] Full clear detected after initial value');
         }
@@ -171,32 +199,19 @@ export class RichTextEditorComponent
     });
 
     this.editorInstance.attachEvent('blur', () => this.onTouched());
-
-    this.editorInstance.attachEvent('imageUpload', async (file: File) => {
-      if (this.imageUploadHandler) {
-        try {
-          const url = await this.imageUploadHandler(file);
-          this.editorInstance.insertImage(url);
-        } catch (error) {
-          console.error('[RTE] Image upload failed:', error);
-        }
-      }
-    });
   }
 
   writeValue(value: any): void {
     const incomingValue = value || '';
-    this.value =  incomingValue ;
-    this.wasInitialValueSet = true;
+    this.value = incomingValue;
 
-    console.log(incomingValue);
+    console.log('incomingValue', incomingValue);
     if (this.editorInstance) {
       const current = this.editorInstance.getHTMLCode() || '';
 
       // ✅ Only call setHTMLCode if content has *meaningfully* changed
       if (this.normalizeHtml(current) !== this.normalizeHtml(incomingValue)) {
-        this.isSystemUpdate = true;
-        this.editorInstance.setHTMLCode( incomingValue );
+        this.editorInstance.setHTMLCode(incomingValue);
       }
     }
   }
@@ -228,22 +243,19 @@ export class RichTextEditorComponent
     if (this.editorInstance?.destroy) {
       this.editorInstance.destroy();
     }
+    clearTimeout(this.changeTimer);
   }
 
   hasRequiredValidator(control: AbstractControl | null): boolean {
-  if (!control || !control.validator) return false;
-  const result = control.validator({ value: null } as AbstractControl);
-  return !!(result && result['required']);
-}
+    if (!control || !control.validator) return false;
+    const result = control.validator({ value: null } as AbstractControl);
+    return !!(result && result['required']);
+  }
   validate(control: AbstractControl): ValidationErrors | null {
     const value = control?.value || '';
     const isEmpty = this.isTrulyEmpty(value);
 
-    const isRequired = control?.hasValidator
-      ? control.hasValidator(Validators.required)
-      : !!control.validator?.({} as AbstractControl)?.['required'];
-
-    if (isRequired && isEmpty) {
+    if (this.hasRequiredValidator(control) && isEmpty) {
       return { required: true };
     }
 
@@ -293,9 +305,10 @@ export class RichTextEditorComponent
   }
 
   get showError(): boolean {
-    this.getCharacterCount(); // debug
     return (
-      (!!this.ngControl?.control?.invalid && !!this.ngControl?.control?.touched) || !!(this.ngControl?.control?.touched && this.value.length === 0)
+      (!!this.ngControl?.control?.invalid &&
+        !!this.ngControl?.control?.touched) ||
+      !!(this.ngControl?.control?.touched && this.value.length === 0)
     );
   }
 
@@ -336,56 +349,83 @@ export class RichTextEditorComponent
     });
   }
 
-     /**
+  /**
    * Prepare the final configuration for the editor instance
    */
   private prepareConfiguration(): any {
-    // Set default height if not specified
-    if (!this.config.height) {
-      this.config.height = 300;
+    const baseConfig = { ...this.config };
+
+    if (!baseConfig.height) {
+      baseConfig.height = 300;
     }
-    
-    // Start with a base configuration that forces desktop mode
-    const enhancedConfig = {
-      ...this.config,
+
+    const enhancedConfig: any = {
+      ...baseConfig,
       license: this.licenseKey,
-      content_changed_callback: () => {
-        this.fixCharacterCount();
-      },
       enableObjectResizing: true,
       enableImageUpload: this.enableImageUpload,
       enableVideoEmbed: this.enableVideoEmbed,
-      
-      // Disable any automatic mobile detection/adjustments
+      file_upload_handler: (
+        file: File,
+        callback: (url: string | null, errorCode?: string) => void,
+        optionalIndex?: number,
+        optionalFiles?: File[]
+      ) => {
+        // delegate to the parent‐supplied handler
+        this.fileUploadHandler(file, callback, optionalIndex, optionalFiles);
+      },
+      content_changed_callback: () => this.fixCharacterCount(),
       forceDesktopMode: true,
       disableMobileMode: true,
       toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
-      showBottomToolbar: false
+      showBottomToolbar: false,
     };
-    
-    // If custom toolbar isn't specified, create one based on enabled features
-    if (!enhancedConfig.toolbar) {
-      const toolbarItems = ['bold', 'italic', 'underline', 'fontname', 'fontsize', 'forecolor', 'backcolor'];
-      
-      if (this.enableImageUpload) {
-        toolbarItems.push('insertimage');
+
+    if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
+      let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+
+      if (this.excludedToolbarItems.length) {
+        for (const tool of this.excludedToolbarItems) {
+          const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
+          fullToolbar = fullToolbar.replace(toolPattern, '');
+        }
+
+        // Clean double pipes, commas, or braces
+        fullToolbar = fullToolbar
+          .replace(/,+/g, ',')
+          .replace(/\|+/g, '|')
+          .replace(/,{2,}/g, ',')
+          .replace(/\{,/, '{')
+          .replace(/,\}/, '}')
+          .replace(/\|,/g, '|')
+          .replace(/,\|/g, '|')
+          .replace(/,\s*}/g, '}')
+          .replace(/{\s*}/g, '')
+          .replace(/\|\|/g, '|')
+          .replace(/^(\||,)+|(\||,)+$/g, '')
+          .trim();
       }
-      
-      if (this.enableVideoEmbed) {
-        toolbarItems.push('insertvideo');
+      if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
+        const hasSlash = this.imageToolbarItems.includes('/');
+        let imageToolbarString = '';
+
+        if (hasSlash) {
+          imageToolbarString = this.imageToolbarItems.join('');
+        } else {
+          imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
+        }
+
+        enhancedConfig.controltoolbar_IMG = imageToolbarString;
       }
-      
-      toolbarItems.push('removeformat', 'undo', 'redo');
-      
       enhancedConfig.toolbar = 'custom';
-      enhancedConfig.toolbar_custom = toolbarItems.join(',');
+      enhancedConfig.toolbar_custom = fullToolbar;
     }
-    
+
     return enhancedConfig;
   }
 
-   /**
+  /**
    * Apply custom styles to improve mobile experience
    */
   private _applyCustomStyles() {
