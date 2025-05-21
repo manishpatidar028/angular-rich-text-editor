@@ -322,7 +322,7 @@ export class RichTextEditorComponent
     return new Promise<void>((resolve, reject) => {
       const doc = document;
 
-      const existingScript = doc.querySelector('script[src*="node_modules/angular-rich-text-editor/assets/richtexteditor/rte.js"]');
+      const existingScript = doc.querySelector('script[src*="node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js"]');
       if (existingScript) {
         resolve();
         return;
@@ -330,14 +330,14 @@ export class RichTextEditorComponent
 
       const cssLink = doc.createElement('link');
       cssLink.rel = 'stylesheet';
-      cssLink.href = 'node_modules/angular-rich-text-editor/assets/richtexteditor/rte_theme_default.css';
+      cssLink.href = 'node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte_theme_default.css';
       doc.head.appendChild(cssLink);
 
       const rteScript = doc.createElement('script');
-      rteScript.src = 'node_modules/angular-rich-text-editor/assets/richtexteditor/rte.js';
+      rteScript.src = 'node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js';
       rteScript.onload = () => {
         const pluginScript = doc.createElement('script');
-        pluginScript.src = 'node_modules/angular-rich-text-editor/assets/richtexteditor/plugins/all_plugins.js';
+        pluginScript.src = 'node_modules/angular-rich-text-editor/src/assets/richtexteditor/plugins/all_plugins.js';
         pluginScript.onload = () => resolve();
         pluginScript.onerror = () => reject('Failed to load all_plugins.js');
         doc.body.appendChild(pluginScript);
