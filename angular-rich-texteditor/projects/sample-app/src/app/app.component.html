@@ -1,12 +1,14 @@
 <h2>Test Rich Text Editor 🧪</h2>
 
 <lib-rich-text-editor
-  [config]="{
-    height: 300,
-    toolbar: 'mytoolbar',
-    toolbar_mytoolbar: '{bold,italic}|{fontname,fontsize}|{forecolor,backcolor}|removeformat#{undo,redo,fullscreenenter,fullscreenexit,togglemore}'
-  }"  [(ngModel)]="content"
-   required
+  [rtePreset]="'FULL'"
+  [imageToolbarItems]="['menu_controljustify','imagestyle', 'delete']"
+  [excludedToolbarItems]="['insertvideo', 'insertgallery']"  [fileUploadHandler]="onRteFileUpload"
+  [(ngModel)]="content"
+    [fileUploadHandler]="onRteFileUpload"
+  [enableImageUpload]="true"
+
+  required
   [errorMessages]="{ required: 'Please enter a description.' }"
 ></lib-rich-text-editor>
 

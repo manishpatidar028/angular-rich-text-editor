@@ -17,11 +17,24 @@ import {
   Validator,
   AbstractControl,
   ValidationErrors,
-  Validators,
 } from '@angular/forms';
+import {
+  RTE_TOOLBAR_PRESETS,
+  RTEImageTool,
+  RTEPreset,
+} from './rich-text-editor.constant';
 
 declare var RichTextEditor: any;
-
+/**
+ * Configuration options for the toolbar
+ */
+export interface RichTextEditorConfig {
+  height?: number;
+  width?: number | string;
+  toolbar?: string;
+  toolbar_custom?: string;
+  [key: string]: any;
+}
 @Component({
   selector: 'lib-rich-text-editor',
   template: `
@@ -60,20 +73,45 @@ export class RichTextEditorComponent
 {
   @ViewChild('editorContainer', { static: true }) editorContainer!: ElementRef;
   @Input() licenseKey: string = '';
-  @Input() config: any = {};
+  @Input() config: RichTextEditorConfig = {};
 
-  @Input() imageUploadHandler: (file: File) => Promise<string> = async () => '';
+  @Input() rtePreset: RTEPreset | null = null;
+  @Input() imageToolbarItems: (RTEImageTool | '/')[] | null = null;
+  @Input() excludedToolbarItems: string[] = [];
 
   @Input() errorMessages: { [key: string]: string } = {
     required: 'This field is required.',
   };
 
+  /**
+   * If provided, RichTextEditor will call this instead of its
+   * default image‐upload logic.
+   *
+   * Should call `callback(url)` on success, or
+   * `callback(null, errorCode)` on failure.
+   */
+  @Input()
+  fileUploadHandler: (
+    file: File,
+    callback: (url: string | null, errorCode?: string) => void,
+    optionalIndex?: number,
+    optionalFiles?: File[]
+  ) => void = () => {};
+
+  /**
+   * Enable or disable image upload functionality
+   */
+  @Input() enableImageUpload: boolean = false;
+
+  /**
+   * Enable or disable video embed functionality
+   */
+  @Input() enableVideoEmbed: boolean = false;
+
   private editorInstance: any;
   private value: string = '';
   private ngControl: NgControl | null = null;
   private changeTimer: any;
-  private isSystemUpdate = false;
-  private wasInitialValueSet = false;
 
   onChange = (value: any) => {};
   onTouched = () => {};
@@ -102,13 +140,9 @@ export class RichTextEditorComponent
   }
 
   private initEditor() {
-    const fullConfig = {
-      license: this.licenseKey,
-      ...this.config,
-      content_changed_callback: () => {
-        this.fixCharacterCount();
-      },
-    };
+    // Prepare the final configuration with our custom settings
+    const fullConfig = this.prepareConfiguration();
+    this._applyCustomStyles();
 
     this.editorInstance = new RichTextEditor(
       this.editorContainer.nativeElement,
@@ -139,11 +173,22 @@ export class RichTextEditorComponent
         // ✅ Force validation cycle
         if (this.ngControl?.control) {
           const control = this.ngControl.control;
-          control.setValue(html, { emitEvent: false }); // don't double emit
+          const finalValue = this.isTrulyEmpty(html) ? '' : html;
+          control.setValue(finalValue, { emitEvent: false }); // don't double emit
           control.updateValueAndValidity();
         }
 
         if (prevValue && cleaned.length === 0) {
+          const control = this.ngControl?.control;
+          if (control) {
+            console.log('[RTE] Full clear detected', control);
+
+            control.markAsTouched(); // Triggers UI error display
+            control.updateValueAndValidity(); // Forces validator re-run
+          }
+          this.editorInstance.setHTMLCode('<p><br></p>');
+
+          console.log(control);
           console.log('[RTE] Full clear detected after initial value');
         }
       }, 150);
@@ -154,30 +199,18 @@ export class RichTextEditorComponent
     });
 
     this.editorInstance.attachEvent('blur', () => this.onTouched());
-
-    this.editorInstance.attachEvent('imageUpload', async (file: File) => {
-      if (this.imageUploadHandler) {
-        try {
-          const url = await this.imageUploadHandler(file);
-          this.editorInstance.insertImage(url);
-        } catch (error) {
-          console.error('[RTE] Image upload failed:', error);
-        }
-      }
-    });
   }
 
   writeValue(value: any): void {
     const incomingValue = value || '';
     this.value = incomingValue;
-    this.wasInitialValueSet = true;
 
+    console.log('incomingValue', incomingValue);
     if (this.editorInstance) {
       const current = this.editorInstance.getHTMLCode() || '';
 
       // ✅ Only call setHTMLCode if content has *meaningfully* changed
       if (this.normalizeHtml(current) !== this.normalizeHtml(incomingValue)) {
-        this.isSystemUpdate = true;
         this.editorInstance.setHTMLCode(incomingValue);
       }
     }
@@ -210,17 +243,19 @@ export class RichTextEditorComponent
     if (this.editorInstance?.destroy) {
       this.editorInstance.destroy();
     }
+    clearTimeout(this.changeTimer);
   }
 
+  hasRequiredValidator(control: AbstractControl | null): boolean {
+    if (!control || !control.validator) return false;
+    const result = control.validator({ value: null } as AbstractControl);
+    return !!(result && result['required']);
+  }
   validate(control: AbstractControl): ValidationErrors | null {
     const value = control?.value || '';
     const isEmpty = this.isTrulyEmpty(value);
 
-    const isRequired = control?.hasValidator
-      ? control.hasValidator(Validators.required)
-      : !!control.validator?.({} as AbstractControl)?.['required'];
-
-    if (isRequired && isEmpty) {
+    if (this.hasRequiredValidator(control) && isEmpty) {
       return { required: true };
     }
 
@@ -270,9 +305,10 @@ export class RichTextEditorComponent
   }
 
   get showError(): boolean {
-    this.getCharacterCount(); // debug
     return (
-      !!this.ngControl?.control?.invalid && !!this.ngControl?.control?.touched
+      (!!this.ngControl?.control?.invalid &&
+        !!this.ngControl?.control?.touched) ||
+      !!(this.ngControl?.control?.touched && this.value.length === 0)
     );
   }
 
@@ -311,5 +347,122 @@ export class RichTextEditorComponent
 
       doc.body.appendChild(rteScript);
     });
+  }
+
+  /**
+   * Prepare the final configuration for the editor instance
+   */
+  private prepareConfiguration(): any {
+    const baseConfig = { ...this.config };
+
+    if (!baseConfig.height) {
+      baseConfig.height = 300;
+    }
+
+    const enhancedConfig: any = {
+      ...baseConfig,
+      license: this.licenseKey,
+      enableObjectResizing: true,
+      enableImageUpload: this.enableImageUpload,
+      enableVideoEmbed: this.enableVideoEmbed,
+      file_upload_handler: (
+        file: File,
+        callback: (url: string | null, errorCode?: string) => void,
+        optionalIndex?: number,
+        optionalFiles?: File[]
+      ) => {
+        // delegate to the parent‐supplied handler
+        this.fileUploadHandler(file, callback, optionalIndex, optionalFiles);
+      },
+      content_changed_callback: () => this.fixCharacterCount(),
+      forceDesktopMode: true,
+      disableMobileMode: true,
+      toolbarModeViewport: 'always-desktop',
+      showFloatingToolbar: false,
+      showBottomToolbar: false,
+    };
+
+    if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
+      let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+
+      if (this.excludedToolbarItems.length) {
+        for (const tool of this.excludedToolbarItems) {
+          const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
+          fullToolbar = fullToolbar.replace(toolPattern, '');
+        }
+
+        // Clean double pipes, commas, or braces
+        fullToolbar = fullToolbar
+          .replace(/,+/g, ',')
+          .replace(/\|+/g, '|')
+          .replace(/,{2,}/g, ',')
+          .replace(/\{,/, '{')
+          .replace(/,\}/, '}')
+          .replace(/\|,/g, '|')
+          .replace(/,\|/g, '|')
+          .replace(/,\s*}/g, '}')
+          .replace(/{\s*}/g, '')
+          .replace(/\|\|/g, '|')
+          .replace(/^(\||,)+|(\||,)+$/g, '')
+          .trim();
+      }
+      if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
+        const hasSlash = this.imageToolbarItems.includes('/');
+        let imageToolbarString = '';
+
+        if (hasSlash) {
+          imageToolbarString = this.imageToolbarItems.join('');
+        } else {
+          imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
+        }
+
+        enhancedConfig.controltoolbar_IMG = imageToolbarString;
+      }
+      enhancedConfig.toolbar = 'custom';
+      enhancedConfig.toolbar_custom = fullToolbar;
+    }
+
+    return enhancedConfig;
+  }
+
+  /**
+   * Apply custom styles to improve mobile experience
+   */
+  private _applyCustomStyles() {
+    // Add a custom stylesheet to fix mobile issues if it doesn't exist yet
+    if (!document.getElementById('rte-consistent-toolbar-styles')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'rte-consistent-toolbar-styles';
+      styleEl.innerHTML = `
+        /* Custom mobile styles to fix toolbar */
+        @media (max-width: 992px) {
+        .rte-toolbar-desktop,
+          .rte-toolbar {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            -webkit-overflow-scrolling: touch !important;
+            max-width: 100% !important;
+            padding: 4px 0 !important;
+          }
+          
+          .rte-toolbar button,
+          .rte-toolbar .rte-dropdown {
+            flex-shrink: 0 !important;
+            min-width: 28px !important;
+            height: 28px !important;
+            margin: 2px !important;
+          }
+          
+          /* Hide any mobile-specific UI the library might add */
+          .rte-toolbar-mobile,
+          .rte-mobile-menu-toggle {
+            display: none !important;
+          }
+        }
+      `;
+      document.head.appendChild(styleEl);
+    }
   }
 }
