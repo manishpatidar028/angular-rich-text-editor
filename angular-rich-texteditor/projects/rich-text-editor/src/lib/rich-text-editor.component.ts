@@ -19,6 +19,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
+import { RichTextEditorService } from './rich-text-editor.service';
 
 declare var RichTextEditor: any;
 /**
@@ -97,7 +98,7 @@ export class RichTextEditorComponent
   onChange = (value: any) => {};
   onTouched = () => {};
 
-  constructor(private injector: Injector) {}
+  constructor(private injector: Injector, private configService: RichTextEditorService) {}
 
   ngOnInit() {
     try {
@@ -361,7 +362,8 @@ export class RichTextEditorComponent
       disableMobileMode: true,
       toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
-      showBottomToolbar: false
+      showBottomToolbar: false,
+      contentCssUrl: this.configService.getContentCssUrl(),
     };
     
     // If custom toolbar isn't specified, create one based on enabled features

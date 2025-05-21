@@ -19,6 +19,7 @@ export const RTE_TOOLBAR_PRESETS = {
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, FormsModule, RichTextEditorModule],
+  providers: [],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
