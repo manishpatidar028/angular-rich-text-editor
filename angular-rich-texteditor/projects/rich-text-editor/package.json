@@ -34,16 +34,9 @@
   "es2015": "./fesm2015/angular-rich-text-editor.js",
   "typings": "./angular-rich-text-editor.d.ts",
   "metadata": "./angular-rich-text-editor.metadata.json",
-  "files": [
-    "bundles/",
-    "esm2015/",
-    "fesm2015/",
-    "angular-rich-text-editor.d.ts",
-    "angular-rich-text-editor.metadata.json",
-    "package.json"
-  ],
+
   "scripts": {
-    "build": "ng build angular-rich-text-editor --prod",
+    "build": "ng build rich-text-editor",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
