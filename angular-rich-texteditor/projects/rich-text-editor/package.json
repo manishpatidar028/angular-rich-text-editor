@@ -1,21 +1,55 @@
 {
   "name": "angular-rich-text-editor",
   "version": "1.0.0",
+  "description": "A lightweight, configurable rich-text editor component for Angular applications.",
+  "author": "Manish Patidar <manishpatidar028@gmail.com>",
+  "license": "MIT",
+  "keywords": [
+    "angular",
+    "angular-rich-text-editor",
+    "angular-wysiwyg",
+    "rich-text-editor",
+    "wysiwyg-editor",
+    "ngx-editor",
+    "content-editor",
+    "editor-toolbar",
+    "form-input",
+    "typescript",
+    "npm-package",
+    "angular-component",
+    "custom-toolbar",
+    "angular-library"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/manishpatidar028/angular-rich-text-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/manishpatidar028/angular-rich-text-editor/issues"
+  },
+  "homepage": "https://github.com/manishpatidar028/angular-rich-text-editor#readme",
+  "sideEffects": false,
+  "main": "./bundles/angular-rich-text-editor.umd.js",
+  "module": "./fesm2015/angular-rich-text-editor.js",
+  "es2015": "./fesm2015/angular-rich-text-editor.js",
+  "typings": "./angular-rich-text-editor.d.ts",
+  "metadata": "./angular-rich-text-editor.metadata.json",
+  "files": [
+    "bundles/",
+    "esm2015/",
+    "fesm2015/",
+    "angular-rich-text-editor.d.ts",
+    "angular-rich-text-editor.metadata.json",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "ng build angular-rich-text-editor --prod",
+    "prepublishOnly": "npm run build"
+  },
   "peerDependencies": {
     "@angular/common": ">=17.0.0 <20.0.0",
     "@angular/core": ">=17.0.0 <20.0.0",
     "@angular/forms": ">=17.0.0 <20.0.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/manishpatidar028/angular-rich-text-editor"
-  },
-  "keywords": [
-    "angular",
-    "rich-text-editor",
-    "wysiwyg",
-    "text editor",
-    "form input"
-  ],
-  "license": "MIT"
+  "dependencies": {}
 }

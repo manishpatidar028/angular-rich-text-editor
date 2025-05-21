@@ -74,7 +74,6 @@ export class RichTextEditorComponent
   @ViewChild('editorContainer', { static: true }) editorContainer!: ElementRef;
   @Input() licenseKey: string = '';
   @Input() config: RichTextEditorConfig = {};
-
   @Input() rtePreset: RTEPreset | null = null;
   @Input() imageToolbarItems: (RTEImageTool | '/')[] | null = null;
   @Input() excludedToolbarItems: string[] = [];
