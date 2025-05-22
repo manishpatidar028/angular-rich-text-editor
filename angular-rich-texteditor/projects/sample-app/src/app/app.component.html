@@ -1,19 +1,17 @@
 <h2>Test Rich Text Editor 🧪</h2>
 
 <lib-rich-text-editor
-  [config]="{
-    height: 300,
-    toolbar: 'mytoolbar',
-    toolbar_mytoolbar: toolbarGroup.FULL
-  }"  
+  [rtePreset]="'FULL'"
+  [imageToolbarItems]="['menu_controljustify','imagestyle', 'delete']"
+  [excludedToolbarItems]="['insertvideo', 'insertgallery']"  [fileUploadHandler]="onRteFileUpload"
   [(ngModel)]="content"
-   required
+    [fileUploadHandler]="onRteFileUpload"
+  [enableImageUpload]="true"
+
+  required
   [errorMessages]="{ required: 'Please enter a description.' }"
 ></lib-rich-text-editor>
 
 <hr />
 <h4>Output:</h4>
 <div [innerHTML]="content"></div>
-
-
-
