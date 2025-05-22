@@ -18,6 +18,7 @@ import {
   AbstractControl,
   ValidationErrors,
 } from '@angular/forms';
+import { RichTextEditorService } from './rich-text-editor.service';
 import {
   RTE_TOOLBAR_PRESETS,
   RTEImageTool,
@@ -115,7 +116,7 @@ export class RichTextEditorComponent
   onChange = (value: any) => {};
   onTouched = () => {};
 
-  constructor(private injector: Injector) {}
+  constructor(private injector: Injector, private configService: RichTextEditorService) {}
 
   ngOnInit() {
     try {
@@ -379,6 +380,7 @@ export class RichTextEditorComponent
       toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
       showBottomToolbar: false,
+      contentCssUrl: this.configService.getContentCssUrl(),
     };
 
     if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {

@@ -8,6 +8,7 @@ import { RTE_TOOLBAR_PRESETS, RTEPreset } from '../../../rich-text-editor/src/li
   selector: 'app-root',
   standalone: true,
   imports: [RouterOutlet, FormsModule, RichTextEditorModule],
+  providers: [],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })
