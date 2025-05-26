@@ -8,6 +8,8 @@ import {
   ViewChild,
   AfterViewInit,
   Injector,
+  Inject,
+  Optional,
 } from '@angular/core';
 import {
   ControlValueAccessor,
@@ -24,6 +26,7 @@ import {
   RTEImageTool,
   RTEPreset,
 } from './rich-text-editor.constant';
+import { RTE_LICENSE_KEY } from './rich-text-editor-license.token';
 
 declare var RichTextEditor: any;
 /**
@@ -118,7 +121,8 @@ export class RichTextEditorComponent
 
   constructor(
     private injector: Injector,
-    private configService: RichTextEditorService
+    private configService: RichTextEditorService,
+    @Optional() @Inject(RTE_LICENSE_KEY) private globalLicenseKey: string
   ) {}
 
   ngOnInit() {
@@ -368,7 +372,7 @@ export class RichTextEditorComponent
 
     const enhancedConfig: any = {
       ...baseConfig,
-      license: this.licenseKey,
+      license: this.globalLicenseKey || this.licenseKey,
       enableObjectResizing: true,
       enableImageUpload: this.enableImageUpload,
       enableVideoEmbed: this.enableVideoEmbed,
@@ -837,44 +841,42 @@ img {
     }
   }
 
-public insertContentAtCursor(content: string) {
-  try {
-    const iframe = this.editorContainer.nativeElement.querySelector('iframe');
+  public insertContentAtCursor(content: string) {
+    try {
+      const iframe = this.editorContainer.nativeElement.querySelector('iframe');
 
-    if (!iframe?.contentWindow || !iframe.contentDocument) {
-      console.warn('[RTE] iframe not found or inaccessible');
-      return;
+      if (!iframe?.contentWindow || !iframe.contentDocument) {
+        console.warn('[RTE] iframe not found or inaccessible');
+        return;
+      }
+
+      // Focus the iframe's editor body
+      const iframeDoc = iframe.contentDocument;
+      const editableBody = iframeDoc.body;
+
+      if (!editableBody?.isContentEditable) {
+        console.warn('[RTE] iframe body is not editable');
+        return;
+      }
+
+      // Set focus into the iframe document
+      editableBody.focus();
+
+      // Inject content at cursor position using iframe document
+      iframeDoc.execCommand('insertHTML', false, content);
+
+      // Sync model with new content
+      const html = this.editorInstance.getHTMLCode();
+      this.value = html;
+      this.onChange(html);
+      this.onTouched();
+
+      if (this.ngControl?.control) {
+        this.ngControl.control.setValue(html, { emitEvent: false });
+        this.ngControl.control.updateValueAndValidity();
+      }
+    } catch (error) {
+      console.error('[RTE] Failed to inject content into iframe:', error);
     }
-
-    // Focus the iframe's editor body
-    const iframeDoc = iframe.contentDocument;
-    const editableBody = iframeDoc.body;
-
-    if (!editableBody?.isContentEditable) {
-      console.warn('[RTE] iframe body is not editable');
-      return;
-    }
-
-    // Set focus into the iframe document
-    editableBody.focus();
-
-    // Inject content at cursor position using iframe document
-    iframeDoc.execCommand('insertHTML', false, content);
-
-    // Sync model with new content
-    const html = this.editorInstance.getHTMLCode();
-    this.value = html;
-    this.onChange(html);
-    this.onTouched();
-
-    if (this.ngControl?.control) {
-      this.ngControl.control.setValue(html, { emitEvent: false });
-      this.ngControl.control.updateValueAndValidity();
-    }
-  } catch (error) {
-    console.error('[RTE] Failed to inject content into iframe:', error);
   }
-}
-
-
 }
