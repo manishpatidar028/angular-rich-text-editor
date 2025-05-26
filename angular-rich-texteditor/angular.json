@@ -66,10 +66,12 @@
               }
             ],
             "styles": [
-              "projects/sample-app/src/assets/richtexteditor/rte_theme_default.css",
+              "node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte_theme_default.css",
               "projects/sample-app/src/styles.scss"
             ],
-            "scripts": ["projects/sample-app/src/assets/richtexteditor/rte.js"]
+            "scripts": [
+              "node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js"
+            ]
           },
           "configurations": {
             "production": {

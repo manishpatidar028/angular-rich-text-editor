@@ -1,7 +1,7 @@
-import { Component } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
-import { RichTextEditorModule } from 'rich-text-editor';
+import { RichTextEditorComponent, RichTextEditorModule } from 'rich-text-editor';
 import { RTE_TOOLBAR_PRESETS, RTEPreset } from '../../../rich-text-editor/src/lib/rich-text-editor.constant';
 
 @Component({
@@ -16,6 +16,7 @@ export class AppComponent {
   toolbarGroup = RTE_TOOLBAR_PRESETS;
   title = 'sample-app';
     content = '<p>Initial content goes here</p>';
+  @ViewChild(RichTextEditorComponent) rte!: RichTextEditorComponent;
 
     onRteFileUpload(
   file: File,
@@ -27,5 +28,8 @@ export class AppComponent {
   console.log('Function hget called on update');
   
 }
-
+injectSignature() {
+    const html = `<span class="signature">Best regards,<br><strong>Team Growth99</strong></span>`;
+    this.rte.insertContentAtCursor(html);
+  }
 }

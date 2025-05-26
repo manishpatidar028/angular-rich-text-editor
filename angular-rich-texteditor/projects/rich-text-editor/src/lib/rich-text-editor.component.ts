@@ -133,13 +133,19 @@ export class RichTextEditorComponent
   }
 
   ngAfterViewInit() {
-    this.loadExternalAssets()
-      .then(() => {
-        this.initEditor();
-      })
-      .catch((err) => {
-        console.error('[RTE] Failed to load assets:', err);
-      });
+    // this.loadExternalAssets()
+    //   .then(() => {
+    //     this.initEditor();
+    //   })
+    //   .catch((err) => {
+    //     console.error('[RTE] Failed to load assets:', err);
+    //   });
+    // this.initEditor();
+
+    // Add a small delay to ensure DOM is fully rendered
+    setTimeout(() => {
+      this.initEditor();
+    }, 100);
   }
 
   private initEditor() {
@@ -184,15 +190,10 @@ export class RichTextEditorComponent
         if (prevValue && cleaned.length === 0) {
           const control = this.ngControl?.control;
           if (control) {
-            console.log('[RTE] Full clear detected', control);
-
             control.markAsTouched(); // Triggers UI error display
             control.updateValueAndValidity(); // Forces validator re-run
           }
           this.editorInstance.setHTMLCode('<p><br></p>');
-
-          console.log(control);
-          console.log('[RTE] Full clear detected after initial value');
         }
       }, 150);
     };
@@ -207,8 +208,6 @@ export class RichTextEditorComponent
   writeValue(value: any): void {
     const incomingValue = value || '';
     this.value = incomingValue;
-
-    console.log('incomingValue', incomingValue);
     if (this.editorInstance) {
       const current = this.editorInstance.getHTMLCode() || '';
 
@@ -388,7 +387,7 @@ export class RichTextEditorComponent
       toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
       showBottomToolbar: false,
-      contentCssUrl: this.configService.getContentCssUrl(),
+      // contentCssUrl: this.configService.getContentCssUrl(),
       contentCSSText: `
 /* TODO: use @import for your css */
 
@@ -837,4 +836,45 @@ img {
       document.head.appendChild(styleEl);
     }
   }
+
+public insertContentAtCursor(content: string) {
+  try {
+    const iframe = this.editorContainer.nativeElement.querySelector('iframe');
+
+    if (!iframe?.contentWindow || !iframe.contentDocument) {
+      console.warn('[RTE] iframe not found or inaccessible');
+      return;
+    }
+
+    // Focus the iframe's editor body
+    const iframeDoc = iframe.contentDocument;
+    const editableBody = iframeDoc.body;
+
+    if (!editableBody?.isContentEditable) {
+      console.warn('[RTE] iframe body is not editable');
+      return;
+    }
+
+    // Set focus into the iframe document
+    editableBody.focus();
+
+    // Inject content at cursor position using iframe document
+    iframeDoc.execCommand('insertHTML', false, content);
+
+    // Sync model with new content
+    const html = this.editorInstance.getHTMLCode();
+    this.value = html;
+    this.onChange(html);
+    this.onTouched();
+
+    if (this.ngControl?.control) {
+      this.ngControl.control.setValue(html, { emitEvent: false });
+      this.ngControl.control.updateValueAndValidity();
+    }
+  } catch (error) {
+    console.error('[RTE] Failed to inject content into iframe:', error);
+  }
+}
+
+
 }
