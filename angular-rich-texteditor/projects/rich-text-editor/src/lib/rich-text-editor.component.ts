@@ -387,7 +387,7 @@ export class RichTextEditorComponent
       toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
       showBottomToolbar: false,
-      // contentCssUrl: this.configService.getContentCssUrl(),
+      contentCssUrl: '',
       contentCSSText: `
 /* TODO: use @import for your css */
 
