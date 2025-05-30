@@ -667,7 +667,7 @@ rte-toolbar-dropdown-item {
 rte-line-spliter {
     width: 1px;
     height: 17px;
-    margin: 10px auto !important;
+    margin: 10px 0px !important;
     background: #e9e9e9;
 }
 
