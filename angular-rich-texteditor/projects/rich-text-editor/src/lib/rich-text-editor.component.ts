@@ -122,11 +122,12 @@ export class RichTextEditorComponent
 
   constructor(
     private injector: Injector,
-    private configService: RichTextEditorService,
+    private rteService: RichTextEditorService,
     @Optional() @Inject(RTE_LICENSE_KEY) private globalLicenseKey: string
   ) {}
 
   ngOnInit() {
+    this.rteService.setCurrentEditor(this);
     try {
       this.ngControl = this.injector.get(NgControl);
       if (this.ngControl) {
@@ -250,6 +251,7 @@ export class RichTextEditorComponent
   }
 
   ngOnDestroy() {
+    this.rteService.clearCurrentEditor();
     if (this.editorInstance?.destroy) {
       this.editorInstance.destroy();
     }
@@ -1080,7 +1082,6 @@ export class RichTextEditorComponent
         return;
       }
 
-      // Focus the iframe's editor body
       const iframeDoc = iframe.contentDocument;
       const editableBody = iframeDoc.body;
 
@@ -1089,13 +1090,9 @@ export class RichTextEditorComponent
         return;
       }
 
-      // Set focus into the iframe document
       editableBody.focus();
-
-      // Inject content at cursor position using iframe document
       iframeDoc.execCommand('insertHTML', false, content);
 
-      // Sync model with new content
       const html = this.editorInstance.getHTMLCode();
       this.value = html;
       this.onChange(html);
