@@ -375,75 +375,84 @@ export class RichTextEditorComponent
 
   // Add this new method to generate expanded mobile toolbar
   // Add this new method to generate expanded mobile toolbar
-  private getMobileExpandedToolbar(): string {
-    // Define tools that are already in the basic mobile toolbar
-    // Based on RTE_DefaultConfig.toolbar_basic
-    const basicMobileTools = [
-      'paragraphs:toggle',
-      'fontname:toggle',
-      'fontsize:toggle',
-      'bold',
-      'italic',
-      'underline',
-      'fontname',
-      'fontsize',
-      'insertlink',
-      'insertemoji',
-      'insertimage',
-      'insertvideo',
-      'removeformat',
-      'code',
-      'toggleborder',
-      'fullscreenenter',
-      'fullscreenexit',
-      'undo',
-      'redo',
-      'togglemore',
-    ];
 
-    if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
-      let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+private getMobileExpandedToolbar(): string {
+  // Define tools that are already in the basic mobile toolbar
+  // Based on RTE_DefaultConfig.toolbar_basic
+  const basicMobileTools = [
+    'paragraphs:dropdown', 'paragraphs:toggle', 'fontname:toggle','fontsize:toggle',
+    'bold', 'italic', 'underline', 'fontname', 'fontsize', 
+    'insertlink', 'insertemoji', 'insertimage', 'insertvideo', 
+    'removeformat', 'code', 'toggleborder', 'fullscreenenter', 
+    'fullscreenexit', 'undo', 'redo', 'togglemore', 'fontname:dropdown', 'fontsize:dropdown',
+  ];
 
+  if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
+    let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+    
       // Remove basic mobile tools from the preset toolbar
-      for (const tool of basicMobileTools) {
-        const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
+    for (const tool of basicMobileTools) {
+      // Escape special regex characters in tool name
+      const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
+      fullToolbar = fullToolbar.replace(toolPattern, '');
+    }
+    
+    // Apply additional exclusions if any
+    if (this.excludedToolbarItems.length) {
+      for (const tool of this.excludedToolbarItems) {
+        const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
         fullToolbar = fullToolbar.replace(toolPattern, '');
       }
-
-      // Apply additional exclusions if any
-      if (this.excludedToolbarItems.length) {
-        for (const tool of this.excludedToolbarItems) {
-          const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
-          fullToolbar = fullToolbar.replace(toolPattern, '');
-        }
-      }
-
-      // Clean up the toolbar string
-      fullToolbar = fullToolbar
-        .replace(/,+/g, ',')
-        .replace(/\|+/g, '|')
-        .replace(/,{2,}/g, ',')
-        .replace(/\{,/, '{')
-        .replace(/,\}/, '}')
-        .replace(/\|,/g, '|')
-        .replace(/,\|/g, '|')
-        .replace(/,\s*}/g, '}')
-        .replace(/{\s*}/g, '')
-        .replace(/\|\|/g, '|')
-        .replace(/^(\||,)+|(\||,)+$/g, '')
-        .replace(/(\|\s*)?:dropdown/g, '')
-        .replace(/\{\s*\|/g, '{')
-        .replace(/\|\s*\}/g, '}')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      console.log('[RTE] Full toolbar after exclusions:', fullToolbar);
-      // Return the filtered toolbar, or fallback if empty
-      return fullToolbar || this.getDefaultMobileExpandedToolbar();
     }
+    
+      // Clean up the toolbar string with improved regex
+    fullToolbar = fullToolbar
+      // First, clean up multiple commas
+      .replace(/,+/g, ',')
+      // Remove empty groups
+      .replace(/\{\s*\}/g, '')
+      // Remove trailing commas inside groups
+      .replace(/,\s*\}/g, '}')
+      // Remove leading commas inside groups
+      .replace(/\{\s*,/g, '{')
+      // Clean up multiple pipes
+      .replace(/\|+/g, '|')
+      // Remove pipes at start/end of groups
+      .replace(/\{\s*\|/g, '{')
+      .replace(/\|\s*\}/g, '}')
+      // Clean up spaces around separators
+      .replace(/\s*,\s*/g, ',')
+      .replace(/\s*\|\s*/g, '|')
+      // Remove empty dropdown definitions
+      .replace(/\|\s*:\s*dropdown/g, '')
+      .replace(/\{\s*:\s*dropdown\s*\}/g, '')
+      // Clean up hash symbols with empty content
+      .replace(/#\s*(?=[/#]|$)/g, '')
+      // Clean up forward slashes with no content
+      .replace(/\/\s*(?=[/#]|$)/g, '')
+      // Remove multiple forward slashes
+      .replace(/\/+/g, '/')
+      // Remove trailing separators
+      .replace(/[,|/#]+$/g, '')
+      // Remove leading separators
+      .replace(/^[,|/#]+/g, '')
+      // Final cleanup of any remaining empty groups
+      .replace(/\{\s*\}/g, '')
+      // Clean up any double spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    
+          console.log('Final cleaned toolbar:', fullToolbar);
 
-    return this.getDefaultMobileExpandedToolbar();
+    // Return the filtered toolbar, or fallback if empty
+    return fullToolbar || this.getDefaultMobileExpandedToolbar();
   }
+  
+  return this.getDefaultMobileExpandedToolbar();
+}
 
   // Separate method for default mobile expanded toolbar
   private getDefaultMobileExpandedToolbar(): string {
