@@ -819,32 +819,36 @@ img {
       const styleEl = document.createElement('style');
       styleEl.id = 'rte-consistent-toolbar-styles';
       styleEl.innerHTML = `
-    /* Custom mobile styles to fix toolbar */
-    @media (max-width: 992px) {
-      .rte-toolbar-desktop,
-      .rte-toolbar {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        overflow-x: auto !important;
-        white-space: nowrap !important;
-        -webkit-overflow-scrolling: touch !important;
-        max-width: 100% !important;
-        padding: 4px 0 !important;
-      }
-      .rte-toolbar button,
-      .rte-toolbar .rte-dropdown {
-        flex-shrink: 0 !important;
-        min-width: 28px !important;
-        height: 28px !important;
-        margin: 2px !important;
-      }
-      /* DO NOT HIDE MOBILE TOOLBAR */
-      /* .rte-toolbar-mobile,
-      .rte-mobile-menu-toggle {
-        display: none !important;
-      } */
-    }
-  `;
+        /* Custom mobile styles to fix toolbar */
+        @media (max-width: 992px) {
+        .rte-toolbar-desktop,
+          .rte-toolbar {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            -webkit-overflow-scrolling: touch !important;
+            max-width: 100% !important;
+            padding: 4px 0 !important;
+          }
+          
+          .rte-toolbar button,
+          .rte-toolbar .rte-dropdown {
+            flex-shrink: 0 !important;
+            min-width: 28px !important;
+            height: 28px !important;
+            margin: 2px !important;
+          }
+            /* Hide mobile toolbar, always show desktop toolbar */
+            .rte-toolbar-mobile,
+            .rte-mobile-menu-toggle {
+              display: none !important;
+            }
+            .rte-toolbar-desktop {
+              display: flex !important;
+            }
+        }
+      `;
       document.head.appendChild(styleEl);
     }
   }
