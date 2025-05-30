@@ -110,6 +110,7 @@ export class RichTextEditorComponent
    * Enable or disable video embed functionality
    */
   @Input() enableVideoEmbed: boolean = false;
+  @Input() readonly: boolean = false;
 
   private editorInstance: any;
   private value: string = '';
@@ -166,6 +167,9 @@ export class RichTextEditorComponent
       this.editorInstance.setHTMLCode(this.value);
     }
 
+    if (this.readonly && this.editorInstance?.setReadOnly) {
+      this.editorInstance.setReadOnly(true);
+    }
     const triggerUpdate = () => {
       if (this.changeTimer) clearTimeout(this.changeTimer);
 
@@ -206,7 +210,15 @@ export class RichTextEditorComponent
       this.editorInstance.attachEvent(event, triggerUpdate);
     });
 
-    this.editorInstance.attachEvent('blur', () => this.onTouched());
+    this.editorInstance.attachEvent('blur', () => {
+      this.onTouched();
+
+      const control = this.ngControl?.control;
+      if (control) {
+        control.markAsTouched(); // Mark as touched for UI error display
+        control.updateValueAndValidity(); // ✅ Trigger validation re-run
+      }
+    });
   }
 
   writeValue(value: any): void {
@@ -240,8 +252,9 @@ export class RichTextEditorComponent
   }
 
   setDisabledState?(isDisabled: boolean): void {
+    const shouldDisable = isDisabled || this.readonly;
     if (this.editorInstance?.setReadOnly) {
-      this.editorInstance.setReadOnly(isDisabled);
+      this.editorInstance.setReadOnly(shouldDisable);
     }
   }
 
@@ -386,9 +399,6 @@ export class RichTextEditorComponent
         this.fileUploadHandler(file, callback, optionalIndex, optionalFiles);
       },
       content_changed_callback: () => this.fixCharacterCount(),
-      forceDesktopMode: true,
-      disableMobileMode: true,
-      toolbarModeViewport: 'always-desktop',
       showFloatingToolbar: false,
       showBottomToolbar: false,
       contentCssUrl: '',
@@ -809,39 +819,38 @@ img {
       const styleEl = document.createElement('style');
       styleEl.id = 'rte-consistent-toolbar-styles';
       styleEl.innerHTML = `
-        /* Custom mobile styles to fix toolbar */
-        @media (max-width: 992px) {
-        .rte-toolbar-desktop,
-          .rte-toolbar {
-            display: flex !important;
-            flex-wrap: wrap !important;
-            overflow-x: auto !important;
-            white-space: nowrap !important;
-            -webkit-overflow-scrolling: touch !important;
-            max-width: 100% !important;
-            padding: 4px 0 !important;
-          }
-          
-          .rte-toolbar button,
-          .rte-toolbar .rte-dropdown {
-            flex-shrink: 0 !important;
-            min-width: 28px !important;
-            height: 28px !important;
-            margin: 2px !important;
-          }
-          
-          /* Hide any mobile-specific UI the library might add */
-          .rte-toolbar-mobile,
-          .rte-mobile-menu-toggle {
-            display: none !important;
-          }
-        }
-      `;
+    /* Custom mobile styles to fix toolbar */
+    @media (max-width: 992px) {
+      .rte-toolbar-desktop,
+      .rte-toolbar {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+        padding: 4px 0 !important;
+      }
+      .rte-toolbar button,
+      .rte-toolbar .rte-dropdown {
+        flex-shrink: 0 !important;
+        min-width: 28px !important;
+        height: 28px !important;
+        margin: 2px !important;
+      }
+      /* DO NOT HIDE MOBILE TOOLBAR */
+      /* .rte-toolbar-mobile,
+      .rte-mobile-menu-toggle {
+        display: none !important;
+      } */
+    }
+  `;
       document.head.appendChild(styleEl);
     }
   }
 
   public insertContentAtCursor(content: string) {
+    if (this.readonly) return;
     try {
       const iframe = this.editorContainer.nativeElement.querySelector('iframe');
 
