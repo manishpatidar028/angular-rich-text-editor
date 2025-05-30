@@ -138,15 +138,6 @@ export class RichTextEditorComponent
   }
 
   ngAfterViewInit() {
-    // this.loadExternalAssets()
-    //   .then(() => {
-    //     this.initEditor();
-    //   })
-    //   .catch((err) => {
-    //     console.error('[RTE] Failed to load assets:', err);
-    //   });
-    // this.initEditor();
-
     // Add a small delay to ensure DOM is fully rendered
     setTimeout(() => {
       this.initEditor();
@@ -338,121 +329,266 @@ export class RichTextEditorComponent
     return this.errorMessages[firstKey] || 'Invalid field';
   }
 
-  private loadExternalAssets(): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const doc = document;
+  // More comprehensive toolbar cleanup method
+  private cleanToolbarString(toolbar: string): string {
+    let cleaned = toolbar;
 
-      const existingScript = doc.querySelector(
-        'script[src*="node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js"]'
-      );
-      if (existingScript) {
-        resolve();
-        return;
-      }
+    // Step 1: Remove :toggle and :dropdown (including any that might be attached to words)
+    cleaned = cleaned.replace(/:toggle/g, '').replace(/:dropdown/g, '');
 
-      const cssLink = doc.createElement('link');
-      cssLink.rel = 'stylesheet';
-      cssLink.href =
-        'node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte_theme_default.css';
-      doc.head.appendChild(cssLink);
-
-      const rteScript = doc.createElement('script');
-      rteScript.src =
-        'node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js';
-      rteScript.onload = () => {
-        const pluginScript = doc.createElement('script');
-        pluginScript.src =
-          'node_modules/angular-rich-text-editor/src/assets/richtexteditor/plugins/all_plugins.js';
-        pluginScript.onload = () => resolve();
-        pluginScript.onerror = () => reject('Failed to load all_plugins.js');
-        doc.body.appendChild(pluginScript);
-      };
-      rteScript.onerror = () => reject('Failed to load rte.js');
-
-      doc.body.appendChild(rteScript);
-    });
-  }
-
-  // Add this new method to generate expanded mobile toolbar
-  // Add this new method to generate expanded mobile toolbar
-
-private getMobileExpandedToolbar(): string {
-  // Define tools that are already in the basic mobile toolbar
-  // Based on RTE_DefaultConfig.toolbar_basic
-  const basicMobileTools = [
-    'paragraphs:dropdown', 'paragraphs:toggle', 'fontname:toggle','fontsize:toggle',
-    'bold', 'italic', 'underline', 'fontname', 'fontsize', 
-    'insertlink', 'insertemoji', 'insertimage', 'insertvideo', 
-    'removeformat', 'code', 'toggleborder', 'fullscreenenter', 
-    'fullscreenexit', 'undo', 'redo', 'togglemore', 'fontname:dropdown', 'fontsize:dropdown',
-  ];
-
-  if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
-    let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
-    
-      // Remove basic mobile tools from the preset toolbar
-    for (const tool of basicMobileTools) {
-      // Escape special regex characters in tool name
-      const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
-      fullToolbar = fullToolbar.replace(toolPattern, '');
-    }
-    
-    // Apply additional exclusions if any
-    if (this.excludedToolbarItems.length) {
-      for (const tool of this.excludedToolbarItems) {
-        const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
-        fullToolbar = fullToolbar.replace(toolPattern, '');
-      }
-    }
-    
-      // Clean up the toolbar string with improved regex
-    fullToolbar = fullToolbar
-      // First, clean up multiple commas
+    // Step 2: Fix spacing issues that may have been created
+    cleaned = cleaned
+      // Remove multiple commas
       .replace(/,+/g, ',')
-      // Remove empty groups
-      .replace(/\{\s*\}/g, '')
-      // Remove trailing commas inside groups
-      .replace(/,\s*\}/g, '}')
-      // Remove leading commas inside groups
-      .replace(/\{\s*,/g, '{')
-      // Clean up multiple pipes
+      // Remove commas at start/end of groups
+      .replace(/\{,+/g, '{')
+      .replace(/,+\}/g, '}')
+      // Remove multiple pipes
       .replace(/\|+/g, '|')
       // Remove pipes at start/end of groups
       .replace(/\{\s*\|/g, '{')
       .replace(/\|\s*\}/g, '}')
-      // Clean up spaces around separators
+      // Remove empty groups
+      .replace(/\{\s*\}/g, '')
+      // Clean up spaces
       .replace(/\s*,\s*/g, ',')
       .replace(/\s*\|\s*/g, '|')
-      // Remove empty dropdown definitions
-      .replace(/\|\s*:\s*dropdown/g, '')
-      .replace(/\{\s*:\s*dropdown\s*\}/g, '')
-      // Clean up hash symbols with empty content
-      .replace(/#\s*(?=[/#]|$)/g, '')
-      // Clean up forward slashes with no content
-      .replace(/\/\s*(?=[/#]|$)/g, '')
-      // Remove multiple forward slashes
-      .replace(/\/+/g, '/')
-      // Remove trailing separators
-      .replace(/[,|/#]+$/g, '')
-      // Remove leading separators
-      .replace(/^[,|/#]+/g, '')
-      // Final cleanup of any remaining empty groups
+      .replace(/\{\s+/g, '{')
+      .replace(/\s+\}/g, '}');
+
+    // Step 3: Fix letter separation issue
+    // This regex finds patterns like "b,o,l,d" and converts them back to "bold"
+    cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
+
+    // Keep applying the fix until no more single-letter separations exist
+    let previousCleaned = '';
+    while (previousCleaned !== cleaned) {
+      previousCleaned = cleaned;
+      cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
+    }
+
+    // Step 4: Process each section to fix missing commas between tools
+    const sections = cleaned.split(/([/#])/);
+    const processedSections: string[] = [];
+
+    for (let i = 0; i < sections.length; i++) {
+      const section = sections[i];
+
+      if (section === '/' || section === '#') {
+        processedSections.push(section);
+        continue;
+      }
+
+      if (!section.trim()) continue;
+
+      // Process groups within sections
+      const groups = section.split('|');
+      const processedGroups: string[] = [];
+
+      for (let group of groups) {
+        // Remove braces temporarily to process content
+        const hasBraces = group.includes('{') || group.includes('}');
+        let content = group.replace(/[{}]/g, '').trim();
+
+        if (!content) continue;
+
+        // Fix tools that got concatenated (e.g., "fontnamefontsizeinlinestyle")
+        // This happens when we remove :toggle between them
+        content = content
+          // Add commas between known concatenated tool names
+          .replace(/(?<=fontname)(?=fontsize)/g, ',')
+          .replace(/(?<=fontsize)(?=inlinestyle)/g, ',')
+          .replace(/(?<=inlinestyle)(?=lineheight)/g, ',')
+          .replace(/(?<=paragraphs)(?=fontname)/g, ',')
+          .replace(/(?<=paragraphstyle)(?=menu_)/g, ',')
+          // Fix specific concatenations
+          .replace(/underlinefore/g, 'underline,fore')
+          .replace(/forecolorback/g, 'forecolor,back')
+          .replace(/backcolor/g, 'backcolor')
+          .replace(/outdentsuperscript/g, 'outdent,superscript')
+          .replace(/insertlinkun/g, 'insertlink,un')
+          .replace(/unlinkinsert/g, 'unlink,insert')
+          .replace(/insertblockquote/g, 'insertblockquote')
+          .replace(/inserttable/g, 'inserttable')
+          .replace(/insertimage/g, 'insertimage')
+          .replace(/removeformat/g, 'removeformat');
+
+        // Clean up any double commas that might have been created
+        content = content.replace(/,+/g, ',').trim();
+
+        if (content) {
+          processedGroups.push(hasBraces ? `{${content}}` : content);
+        }
+      }
+
+      if (processedGroups.length > 0) {
+        processedSections.push(processedGroups.join('|'));
+      }
+    }
+
+    // Step 5: Reassemble and do final cleanup
+    cleaned = processedSections.join('');
+
+    // Final cleanup pass
+    cleaned = cleaned
+      // Remove any remaining empty groups
       .replace(/\{\s*\}/g, '')
-      // Clean up any double spaces
+      // Remove duplicate separators
+      .replace(/\|+/g, '|')
+      .replace(/\/+/g, '/')
+      .replace(/#+/g, '#')
+      // Remove trailing/leading separators
+      .replace(/^[|/#]+|[|/#]+$/g, '')
+      // Final whitespace cleanup
       .replace(/\s+/g, ' ')
       .trim();
-      
-    
-          console.log('Final cleaned toolbar:', fullToolbar);
 
-    // Return the filtered toolbar, or fallback if empty
-    return fullToolbar || this.getDefaultMobileExpandedToolbar();
+    return cleaned;
   }
-  
-  return this.getDefaultMobileExpandedToolbar();
-}
+
+  // Alternative approach: Complete rewrite that's more robust
+  private cleanToolbarStringV2(toolbar: string): string {
+    // First, remove all :toggle and :dropdown modifiers
+    let cleaned = toolbar.replace(/:(?:toggle|dropdown)/g, '');
+
+    // Split by major separators but keep them
+    const parts = cleaned.split(/([/#|{}])/);
+    const result: string[] = [];
+
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+
+      // Keep separators as-is
+      if (/^[/#|{}]$/.test(part)) {
+        result.push(part);
+        continue;
+      }
+
+      // Skip empty parts
+      if (!part) continue;
+
+      // Process tool names
+      // First, fix any comma-separated single letters (like "b,o,l,d")
+      let processed = part;
+      let prev = '';
+      while (prev !== processed) {
+        prev = processed;
+        processed = processed.replace(/\b([a-z]),([a-z])\b/g, '$1$2');
+      }
+
+      // Now split by commas and process each tool
+      const tools = processed
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t);
+
+      // Fix known concatenations
+      const fixedTools: string[] = [];
+      for (let tool of tools) {
+        // Fix specific known issues
+        tool = tool
+          .replace(/^underlinefore/, 'underline,fore')
+          .replace(/^forecolorback/, 'forecolor,back')
+          .replace(/^outdentsuperscript/, 'outdent,superscript')
+          .replace(/^insertlinkun/, 'insertlink,un')
+          .replace(/^unlinkinsert/, 'unlink,insert')
+          .replace(/^fontnamesize/, 'fontname,fontsize')
+          .replace(/^fontsizeinlinestyle/, 'fontsize,inlinestyle')
+          .replace(/^inlinestylelineheight/, 'inlinestyle,lineheight')
+          .replace(/^paragraphstylemenu_/, 'paragraphstyle,menu_');
+
+        // Split if we created multiple tools
+        if (tool.includes(',')) {
+          fixedTools.push(...tool.split(',').map((t) => t.trim()));
+        } else {
+          fixedTools.push(tool);
+        }
+      }
+
+      // Add the processed tools
+      if (fixedTools.length > 0) {
+        result.push(fixedTools.join(','));
+      }
+    }
+
+    // Join everything back together
+    cleaned = result.join('');
+
+    // Final cleanup
+    cleaned = cleaned
+      .replace(/\{\}/g, '') // Remove empty groups
+      .replace(/\|+/g, '|') // Remove duplicate pipes
+      .replace(/\/+/g, '/') // Remove duplicate slashes
+      .replace(/#+/g, '#') // Remove duplicate hashes
+      .replace(/\{,/g, '{') // Remove commas after opening brace
+      .replace(/,\}/g, '}') // Remove commas before closing brace
+      .replace(/^[|/#]+|[|/#]+$/g, '') // Remove leading/trailing separators
+      .trim();
+
+    return cleaned;
+  }
+
+  // Add this new method to generate expanded mobile toolbar
+  // Add this new method to generate expanded mobile toolbar
+
+  private getMobileExpandedToolbar(): string {
+    // Define tools that are already in the basic mobile toolbar
+    // Based on RTE_DefaultConfig.toolbar_basic
+    const basicMobileTools = [
+      'paragraphs:dropdown',
+      'paragraphs:toggle',
+      'fontname:toggle',
+      'fontsize:toggle',
+      'bold',
+      'italic',
+      'underline',
+      'fontname',
+      'fontsize',
+      'insertlink',
+      'insertemoji',
+      'insertimage',
+      'insertvideo',
+      'removeformat',
+      'code',
+      'toggleborder',
+      'fullscreenenter',
+      'fullscreenexit',
+      'undo',
+      'redo',
+      'togglemore',
+      'fontname:dropdown',
+      'fontsize:dropdown',
+    ];
+
+    if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
+      let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+
+      // Remove basic mobile tools from the preset toolbar
+      for (const tool of basicMobileTools) {
+        // Escape special regex characters in tool name
+        const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
+        fullToolbar = fullToolbar.replace(toolPattern, '');
+      }
+
+      // Apply additional exclusions if any
+      if (this.excludedToolbarItems.length) {
+        for (const tool of this.excludedToolbarItems) {
+          const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
+          fullToolbar = fullToolbar.replace(toolPattern, '');
+        }
+      }
+
+      // Clean up the toolbar string with improved regex
+      fullToolbar = this.cleanToolbarString(fullToolbar);
+
+      // Return the filtered toolbar, or fallback if empty
+      return fullToolbar || this.getDefaultMobileExpandedToolbar();
+    }
+
+    return this.getDefaultMobileExpandedToolbar();
+  }
 
   // Separate method for default mobile expanded toolbar
   private getDefaultMobileExpandedToolbar(): string {
@@ -873,19 +1009,7 @@ private getMobileExpandedToolbar(): string {
         }
 
         // Clean double pipes, commas, or braces
-        fullToolbar = fullToolbar
-          .replace(/,+/g, ',')
-          .replace(/\|+/g, '|')
-          .replace(/,{2,}/g, ',')
-          .replace(/\{,/, '{')
-          .replace(/,\}/, '}')
-          .replace(/\|,/g, '|')
-          .replace(/,\|/g, '|')
-          .replace(/,\s*}/g, '}')
-          .replace(/{\s*}/g, '')
-          .replace(/\|\|/g, '|')
-          .replace(/^(\||,)+|(\||,)+$/g, '')
-          .trim();
+        fullToolbar = this.cleanToolbarString(fullToolbar);
       }
       if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
         const hasSlash = this.imageToolbarItems.includes('/');
