@@ -373,6 +373,88 @@ export class RichTextEditorComponent
     });
   }
 
+  // Add this new method to generate expanded mobile toolbar
+  // Add this new method to generate expanded mobile toolbar
+  private getMobileExpandedToolbar(): string {
+    // Define tools that are already in the basic mobile toolbar
+    // Based on RTE_DefaultConfig.toolbar_basic
+    const basicMobileTools = [
+      'paragraphs:toggle',
+      'fontname:toggle',
+      'fontsize:toggle',
+      'bold',
+      'italic',
+      'underline',
+      'fontname',
+      'fontsize',
+      'insertlink',
+      'insertemoji',
+      'insertimage',
+      'insertvideo',
+      'removeformat',
+      'code',
+      'toggleborder',
+      'fullscreenenter',
+      'fullscreenexit',
+      'undo',
+      'redo',
+      'togglemore',
+    ];
+
+    if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
+      let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
+
+      // Remove basic mobile tools from the preset toolbar
+      for (const tool of basicMobileTools) {
+        const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
+        fullToolbar = fullToolbar.replace(toolPattern, '');
+      }
+
+      // Apply additional exclusions if any
+      if (this.excludedToolbarItems.length) {
+        for (const tool of this.excludedToolbarItems) {
+          const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
+          fullToolbar = fullToolbar.replace(toolPattern, '');
+        }
+      }
+
+      // Clean up the toolbar string
+      fullToolbar = fullToolbar
+        .replace(/,+/g, ',')
+        .replace(/\|+/g, '|')
+        .replace(/,{2,}/g, ',')
+        .replace(/\{,/, '{')
+        .replace(/,\}/, '}')
+        .replace(/\|,/g, '|')
+        .replace(/,\|/g, '|')
+        .replace(/,\s*}/g, '}')
+        .replace(/{\s*}/g, '')
+        .replace(/\|\|/g, '|')
+        .replace(/^(\||,)+|(\||,)+$/g, '')
+        .replace(/(\|\s*)?:dropdown/g, '')
+        .replace(/\{\s*\|/g, '{')
+        .replace(/\|\s*\}/g, '}')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      console.log('[RTE] Full toolbar after exclusions:', fullToolbar);
+      // Return the filtered toolbar, or fallback if empty
+      return fullToolbar || this.getDefaultMobileExpandedToolbar();
+    }
+
+    return this.getDefaultMobileExpandedToolbar();
+  }
+
+  // Separate method for default mobile expanded toolbar
+  private getDefaultMobileExpandedToolbar(): string {
+    // Default expanded mobile toolbar - excluding tools already in basic toolbar
+    return `{strike,subscript,superscript}|{forecolor,backcolor}|
+          {justifyleft,justifycenter,justifyright,justifyfull}|
+          {insertorderedlist,insertunorderedlist}|{outdent,indent}|
+          {inserthorizontalrule,insertblockquote,inserttable}|
+          {cut,copy,paste,pastetext,pasteword}|
+          {find,replace}|{selectall,print,spellcheck}|{help}`;
+  }
   /**
    * Prepare the final configuration for the editor instance
    */
@@ -400,370 +482,375 @@ export class RichTextEditorComponent
       },
       content_changed_callback: () => this.fixCharacterCount(),
       showFloatingToolbar: false,
+      forceDesktopMode: true,
+      disableMobileMode: true,
+      toolbarModeViewport: 'always-desktop',
       showBottomToolbar: false,
       contentCssUrl: '',
-      contentCSSText: `
-/* TODO: use @import for your css */
-
-body {
-	overflow-y: hidden;
-	padding: 0px;
-	margin: 0px
-}
-
-body, table, p, div {
-	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-	color: #414141;
-	font-size: 14px;
-	line-height: 1.6;
-}
-
-a {
-	color: #377dff;
-	text-decoration: none;
-	-webkit-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-	-moz-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-	-o-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-	transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-}
-
-::selection {
-	background: #b5d6fd;
-	color: #000030;
-}
-
-/*RTE_DefaultConfig.items_InlineClasses*/
-.my-cls-mark {
-	background-color: yellow;
-	font-weight: bold;
-}
-
-.my-cls-warning {
-	background-color: orange;
-	color: white;
-	font-weight: bold;
-}
-/*RTE_DefaultConfig.items_ParagraphClasses*/
-.my-cls-quote {
-	margin: 10px;
-	padding-left: 10px;
-	border-left: dashed 1px red;
-	font-style: italic;
-}
-
-.my-cls-largecenter {
-	font-size: 1.5em;
-	font-weight: bold;
-	text-align: center;
-	margin: 10px;
-}
-
-* {
-	box-sizing: border-box;
-}
-
-[__rte_selected_hover__] {
-	background-color: #b5d6fd;
-}
-
-[__rte_selected_cell] {
-	background-color: #b5d6fd;
-}
-
-[__rte_selected_hover] {
-	background: #b5d6fd;
-	color: #000;
-}
-
-.rte-toggleborder [__rte_selected_block] {
-	/*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
-	/*border-radius: 1px;*/
-	/*outline: 0.5px solid #377dff99;*/
-	border-right:solid 1px #377dff;
-}
-
-.rte-toggleborder blockquote[__rte_selected_block] {
-	/*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
-	/*border-radius: 1px;*/
-	outline: none;
-}
-
-.rte-toggleborder td[__rte_selected_block] {
-	box-shadow: none !important;
-}
-
-table {
-	border-spacing: 0;
-	border-collapse: collapse;
-}
-
-	table:not([width]) {
-		width: 100%;
-	}
-
-	table[border="0"] td, table:not([border]) td, table[border="0"] th, table:not([border]) th {
-		border: 1px solid #ddd;
-	}
-
-thead {
-	background-color: #eee;
-}
-
-.table > tbody > tr > td, .table > tbody > tr > th, .table > tfoot > tr > td, .table > tfoot > tr > th, .table > thead > tr > td, .table > thead > tr > th {
-	padding: 8px;
-	line-height: 1.42857143;
-	vertical-align: top;
-	border-top: 1px solid #ddd;
-}
-
-video-container {
-	position: relative
-}
-
-	video-container:after {
-		content: '';
-		display: block;
-		position: absolute;
-		z-index: 1;
-		left: 0px;
-		top: 0px;
-		right: 0px;
-		bottom: 0px;
-		background-color: rgba(128,128,128,0.2);
-	}
-
-blockquote {
-	border-left: 3px solid #ddd;
-	padding: 5px 0 5px 10px;
-	margin: 15px 0 15px 15px;
-}
-
-
-img {
-	cursor: default;
-}
-
-
-
-
-.dp-highlighter {
-	font-family: "Consolas", "Courier New", Courier, mono, serif;
-	font-size: 12px;
-	background-color: #E7E5DC;
-	width: 99%;
-	overflow: auto;
-	margin: 18px 0 18px 0 !important;
-	padding-top: 1px; /* adds a little border on top when controls are hidden */
-}
-
-	/* clear styles */
-	.dp-highlighter ol,
-	.dp-highlighter ol li,
-	.dp-highlighter ol li span {
-		margin: 0;
-		padding: 0;
-		border: none;
-	}
-
-	.dp-highlighter a,
-	.dp-highlighter a:hover {
-		background: none;
-		border: none;
-		padding: 0;
-		margin: 0;
-	}
-
-	.dp-highlighter .bar {
-		padding-left: 45px;
-	}
-
-	.dp-highlighter.collapsed .bar,
-	.dp-highlighter.nogutter .bar {
-		padding-left: 0px;
-	}
-
-	.dp-highlighter ol {
-		list-style: decimal; /* for ie */
-		background-color: #fff;
-		margin: 0px 0px 1px 45px !important; /* 1px bottom margin seems to fix occasional Firefox scrolling */
-		padding: 0px;
-		color: #5C5C5C;
-	}
-
-	.dp-highlighter.nogutter ol,
-	.dp-highlighter.nogutter ol li {
-		list-style: none !important;
-		margin-left: 0px !important;
-	}
-
-	.dp-highlighter ol li,
-	.dp-highlighter .columns div {
-		list-style: decimal-leading-zero; /* better look for others, override cascade from OL */
-		list-style-position: outside !important;
-		border-left: 3px solid #6CE26C;
-		background-color: #F8F8F8;
-		color: #5C5C5C;
-		padding: 0 3px 0 10px !important;
-		margin: 0 !important;
-	}
-
-	.dp-highlighter.nogutter ol li,
-	.dp-highlighter.nogutter .columns div {
-		border: 0;
-	}
-
-	.dp-highlighter .columns {
-		background-color: #F8F8F8;
-		color: gray;
-		overflow: hidden;
-		width: 100%;
-	}
-
-		.dp-highlighter .columns div {
-			padding-bottom: 5px;
-		}
-
-	.dp-highlighter ol li.alt {
-		background-color: #FFF;
-		color: inherit;
-	}
-
-	.dp-highlighter ol li span {
-		color: black;
-		background-color: inherit;
-	}
-
-	/* Adjust some properties when collapsed */
-
-	.dp-highlighter.collapsed ol {
-		margin: 0px;
-	}
-
-		.dp-highlighter.collapsed ol li {
-			display: none;
-		}
-
-	/* Additional modifications when in print-view */
-
-	.dp-highlighter.printing {
-		border: none;
-	}
-
-		.dp-highlighter.printing .tools {
-			display: none !important;
-		}
-
-		.dp-highlighter.printing li {
-			display: list-item !important;
-		}
-
-	/* Styles for the tools */
-
-	.dp-highlighter .tools {
-		padding: 3px 8px 3px 10px;
-		font: 9px Verdana, Geneva, Arial, Helvetica, sans-serif;
-		color: silver;
-		background-color: #f8f8f8;
-		padding-bottom: 10px;
-		border-left: 3px solid #6CE26C;
-	}
-
-	.dp-highlighter.nogutter .tools {
-		border-left: 0;
-	}
-
-	.dp-highlighter.collapsed .tools {
-		border-bottom: 0;
-	}
-
-	.dp-highlighter .tools a {
-		font-size: 9px;
-		color: #a0a0a0;
-		background-color: inherit;
-		text-decoration: none;
-		margin-right: 10px;
-	}
-
-		.dp-highlighter .tools a:hover {
-			color: red;
-			background-color: inherit;
-			text-decoration: underline;
-		}
-
-/* About dialog styles */
-
-.dp-about {
-	background-color: #fff;
-	color: #333;
-	margin: 0px;
-	padding: 0px;
-}
-
-	.dp-about table {
-		width: 100%;
-		height: 100%;
-		font-size: 11px;
-		font-family: Tahoma, Verdana, Arial, sans-serif !important;
-	}
-
-	.dp-about td {
-		padding: 10px;
-		vertical-align: top;
-	}
-
-	.dp-about .copy {
-		border-bottom: 1px solid #ACA899;
-		height: 95%;
-	}
-
-	.dp-about .title {
-		color: red;
-		background-color: inherit;
-		font-weight: bold;
-	}
-
-	.dp-about .para {
-		margin: 0 0 4px 0;
-	}
-
-	.dp-about .footer {
-		background-color: #ECEADB;
-		color: #333;
-		border-top: 1px solid #fff;
-		text-align: right;
-	}
-
-	.dp-about .close {
-		font-size: 11px;
-		font-family: Tahoma, Verdana, Arial, sans-serif !important;
-		background-color: #ECEADB;
-		color: #333;
-		width: 60px;
-		height: 22px;
-	}
-
-/* Language specific styles */
-
-.dp-highlighter .comment, .dp-highlighter .comments {
-	color: #008200;
-	background-color: inherit;
-}
-
-.dp-highlighter .string {
-	color: blue;
-	background-color: inherit;
-}
-
-.dp-highlighter .keyword {
-	color: #069;
-	font-weight: bold;
-	background-color: inherit;
-}
-
-.dp-highlighter .preprocessor {
-	color: gray;
-	background-color: inherit;
-}
+      toolbarMobile: 'basic',
+      subtoolbar_more_mobile: this.getMobileExpandedToolbar(),
+      contentCSSText: `,
+      /* TODO: use @import for your css */
+
+      body {
+        overflow-y: hidden;
+        padding: 0px;
+        margin: 0px
+      }
+
+      body, table, p, div {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #414141;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      a {
+        color: #377dff;
+        text-decoration: none;
+        -webkit-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
+        -moz-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
+        -o-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
+        transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
+      }
+
+      ::selection {
+        background: #b5d6fd;
+        color: #000030;
+      }
+
+      /*RTE_DefaultConfig.items_InlineClasses*/
+      .my-cls-mark {
+        background-color: yellow;
+        font-weight: bold;
+      }
+
+      .my-cls-warning {
+        background-color: orange;
+        color: white;
+        font-weight: bold;
+      }
+      /*RTE_DefaultConfig.items_ParagraphClasses*/
+      .my-cls-quote {
+        margin: 10px;
+        padding-left: 10px;
+        border-left: dashed 1px red;
+        font-style: italic;
+      }
+
+      .my-cls-largecenter {
+        font-size: 1.5em;
+        font-weight: bold;
+        text-align: center;
+        margin: 10px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [__rte_selected_hover__] {
+        background-color: #b5d6fd;
+      }
+
+      [__rte_selected_cell] {
+        background-color: #b5d6fd;
+      }
+
+      [__rte_selected_hover] {
+        background: #b5d6fd;
+        color: #000;
+      }
+
+      .rte-toggleborder [__rte_selected_block] {
+        /*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
+        /*border-radius: 1px;*/
+        /*outline: 0.5px solid #377dff99;*/
+        border-right:solid 1px #377dff;
+      }
+
+      .rte-toggleborder blockquote[__rte_selected_block] {
+        /*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
+        /*border-radius: 1px;*/
+        outline: none;
+      }
+
+      .rte-toggleborder td[__rte_selected_block] {
+        box-shadow: none !important;
+      }
+
+      table {
+        border-spacing: 0;
+        border-collapse: collapse;
+      }
+
+        table:not([width]) {
+          width: 100%;
+        }
+
+        table[border="0"] td, table:not([border]) td, table[border="0"] th, table:not([border]) th {
+          border: 1px solid #ddd;
+        }
+
+      thead {
+        background-color: #eee;
+      }
+
+      .table > tbody > tr > td, .table > tbody > tr > th, .table > tfoot > tr > td, .table > tfoot > tr > th, .table > thead > tr > td, .table > thead > tr > th {
+        padding: 8px;
+        line-height: 1.42857143;
+        vertical-align: top;
+        border-top: 1px solid #ddd;
+      }
+
+      video-container {
+        position: relative
+      }
+
+        video-container:after {
+          content: '';
+          display: block;
+          position: absolute;
+          z-index: 1;
+          left: 0px;
+          top: 0px;
+          right: 0px;
+          bottom: 0px;
+          background-color: rgba(128,128,128,0.2);
+        }
+
+      blockquote {
+        border-left: 3px solid #ddd;
+        padding: 5px 0 5px 10px;
+        margin: 15px 0 15px 15px;
+      }
+
+
+      img {
+        cursor: default;
+      }
+
+
+
+
+      .dp-highlighter {
+        font-family: "Consolas", "Courier New", Courier, mono, serif;
+        font-size: 12px;
+        background-color: #E7E5DC;
+        width: 99%;
+        overflow: auto;
+        margin: 18px 0 18px 0 !important;
+        padding-top: 1px; /* adds a little border on top when controls are hidden */
+      }
+
+        /* clear styles */
+        .dp-highlighter ol,
+        .dp-highlighter ol li,
+        .dp-highlighter ol li span {
+          margin: 0;
+          padding: 0;
+          border: none;
+        }
+
+        .dp-highlighter a,
+        .dp-highlighter a:hover {
+          background: none;
+          border: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .dp-highlighter .bar {
+          padding-left: 45px;
+        }
+
+        .dp-highlighter.collapsed .bar,
+        .dp-highlighter.nogutter .bar {
+          padding-left: 0px;
+        }
+
+        .dp-highlighter ol {
+          list-style: decimal; /* for ie */
+          background-color: #fff;
+          margin: 0px 0px 1px 45px !important; /* 1px bottom margin seems to fix occasional Firefox scrolling */
+          padding: 0px;
+          color: #5C5C5C;
+        }
+
+        .dp-highlighter.nogutter ol,
+        .dp-highlighter.nogutter ol li {
+          list-style: none !important;
+          margin-left: 0px !important;
+        }
+
+        .dp-highlighter ol li,
+        .dp-highlighter .columns div {
+          list-style: decimal-leading-zero; /* better look for others, override cascade from OL */
+          list-style-position: outside !important;
+          border-left: 3px solid #6CE26C;
+          background-color: #F8F8F8;
+          color: #5C5C5C;
+          padding: 0 3px 0 10px !important;
+          margin: 0 !important;
+        }
+
+        .dp-highlighter.nogutter ol li,
+        .dp-highlighter.nogutter .columns div {
+          border: 0;
+        }
+
+        .dp-highlighter .columns {
+          background-color: #F8F8F8;
+          color: gray;
+          overflow: hidden;
+          width: 100%;
+        }
+
+          .dp-highlighter .columns div {
+            padding-bottom: 5px;
+          }
+
+        .dp-highlighter ol li.alt {
+          background-color: #FFF;
+          color: inherit;
+        }
+
+        .dp-highlighter ol li span {
+          color: black;
+          background-color: inherit;
+        }
+
+        /* Adjust some properties when collapsed */
+
+        .dp-highlighter.collapsed ol {
+          margin: 0px;
+        }
+
+          .dp-highlighter.collapsed ol li {
+            display: none;
+          }
+
+        /* Additional modifications when in print-view */
+
+        .dp-highlighter.printing {
+          border: none;
+        }
+
+          .dp-highlighter.printing .tools {
+            display: none !important;
+          }
+
+          .dp-highlighter.printing li {
+            display: list-item !important;
+          }
+
+        /* Styles for the tools */
+
+        .dp-highlighter .tools {
+          padding: 3px 8px 3px 10px;
+          font: 9px Verdana, Geneva, Arial, Helvetica, sans-serif;
+          color: silver;
+          background-color: #f8f8f8;
+          padding-bottom: 10px;
+          border-left: 3px solid #6CE26C;
+        }
+
+        .dp-highlighter.nogutter .tools {
+          border-left: 0;
+        }
+
+        .dp-highlighter.collapsed .tools {
+          border-bottom: 0;
+        }
+
+        .dp-highlighter .tools a {
+          font-size: 9px;
+          color: #a0a0a0;
+          background-color: inherit;
+          text-decoration: none;
+          margin-right: 10px;
+        }
+
+          .dp-highlighter .tools a:hover {
+            color: red;
+            background-color: inherit;
+            text-decoration: underline;
+          }
+
+      /* About dialog styles */
+
+      .dp-about {
+        background-color: #fff;
+        color: #333;
+        margin: 0px;
+        padding: 0px;
+      }
+
+        .dp-about table {
+          width: 100%;
+          height: 100%;
+          font-size: 11px;
+          font-family: Tahoma, Verdana, Arial, sans-serif !important;
+        }
+
+        .dp-about td {
+          padding: 10px;
+          vertical-align: top;
+        }
+
+        .dp-about .copy {
+          border-bottom: 1px solid #ACA899;
+          height: 95%;
+        }
+
+        .dp-about .title {
+          color: red;
+          background-color: inherit;
+          font-weight: bold;
+        }
+
+        .dp-about .para {
+          margin: 0 0 4px 0;
+        }
+
+        .dp-about .footer {
+          background-color: #ECEADB;
+          color: #333;
+          border-top: 1px solid #fff;
+          text-align: right;
+        }
+
+        .dp-about .close {
+          font-size: 11px;
+          font-family: Tahoma, Verdana, Arial, sans-serif !important;
+          background-color: #ECEADB;
+          color: #333;
+          width: 60px;
+          height: 22px;
+        }
+
+      /* Language specific styles */
+
+      .dp-highlighter .comment, .dp-highlighter .comments {
+        color: #008200;
+        background-color: inherit;
+      }
+
+      .dp-highlighter .string {
+        color: blue;
+        background-color: inherit;
+      }
+
+      .dp-highlighter .keyword {
+        color: #069;
+        font-weight: bold;
+        background-color: inherit;
+      }
+
+      .dp-highlighter .preprocessor {
+        color: gray;
+        background-color: inherit;
+      }
 `,
     };
 
@@ -831,7 +918,7 @@ img {
             max-width: 100% !important;
             padding: 4px 0 !important;
           }
-          
+     
           .rte-toolbar button,
           .rte-toolbar .rte-dropdown {
             flex-shrink: 0 !important;
@@ -840,10 +927,7 @@ img {
             margin: 2px !important;
           }
             /* Hide mobile toolbar, always show desktop toolbar */
-            .rte-toolbar-mobile,
-            .rte-mobile-menu-toggle {
-              display: none !important;
-            }
+           
             .rte-toolbar-desktop {
               display: flex !important;
             }

@@ -301,10 +301,12 @@ rte-toolbar-group {
     display: inline-flex;
     flex-direction: row;
     padding: 2px;
+    justify-content: flex-start !important;
 }
 
 .rte-toolbar-mobile rte-toolbar-group {
     padding: 1px;
+    justify-content: flex-start !important;
 }
 
 .rte-office rte-toolbar-group {
@@ -1729,6 +1731,13 @@ rte-toast {
 .rte-skin-rounded-corner rte-bottom {
     border-bottom-left-radius: 7px;
     border-bottom-right-radius: 7px;
+}
+
+
+@media screen and (max-width: 767px){
+    .rte-toolbar-group{
+        justify-content:  flex-start !important;
+    }
 }
 
 rte-content::-webkit-scrollbar {
