@@ -255,6 +255,7 @@ export class RichTextEditorComponent
     if (this.editorInstance?.destroy) {
       this.editorInstance.destroy();
     }
+    this.hideAllFloatPanels();
     clearTimeout(this.changeTimer);
   }
 
@@ -1104,6 +1105,25 @@ export class RichTextEditorComponent
       }
     } catch (error) {
       console.error('[RTE] Failed to inject content into iframe:', error);
+    }
+  }
+
+  // Method to hide all floating panels
+  public hideAllFloatPanels(): void {
+    // Hide all float panels
+    const floatPanels = document.querySelectorAll('rte-floatpanel');
+    floatPanels.forEach((panel) => {
+      if (panel instanceof HTMLElement) {
+        panel.style.display = 'none';
+      }
+    });
+
+    // Also try removing the specific paragraph operations panel
+    const paragraphOpPanel = document.querySelector(
+      '.rte-floatpanel-paragraphop'
+    );
+    if (paragraphOpPanel instanceof HTMLElement) {
+      paragraphOpPanel.style.display = 'none';
     }
   }
 }
