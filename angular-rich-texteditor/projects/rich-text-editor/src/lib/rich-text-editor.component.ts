@@ -11,6 +11,7 @@ import {
   Inject,
   Optional,
   ChangeDetectorRef,
+  NgZone,
 } from '@angular/core';
 import {
   ControlValueAccessor,
@@ -52,6 +53,10 @@ export interface RichTextEditorConfig {
   `,
   styles: [
     `
+      :host {
+        display: block;
+        position: relative;
+      }
       .invalid {
         border: 1px solid red;
       }
@@ -90,13 +95,6 @@ export class RichTextEditorComponent
     required: 'This field is required.',
   };
 
-  /**
-   * If provided, RichTextEditor will call this instead of its
-   * default image‐upload logic.
-   *
-   * Should call `callback(url)` on success, or
-   * `callback(null, errorCode)` on failure.
-   */
   @Input()
   fileUploadHandler: (
     file: File,
@@ -105,14 +103,7 @@ export class RichTextEditorComponent
     optionalFiles?: File[]
   ) => void = () => {};
 
-  /**
-   * Enable or disable image upload functionality
-   */
   @Input() enableImageUpload: boolean = false;
-
-  /**
-   * Enable or disable video embed functionality
-   */
   @Input() enableVideoEmbed: boolean = false;
   @Input() readonly: boolean = false;
 
@@ -121,7 +112,9 @@ export class RichTextEditorComponent
   private ngControl: NgControl | null = null;
   private changeTimer: any;
   private isDestroyed: boolean = false;
-  private floatPanelCleanupAttempts: number = 0;
+  private cleanupAttempts: number = 0;
+  private eventListeners: Array<{ event: string; handler: any }> = [];
+  private domCleanupTimer: any;
 
   onChange = (value: any) => {};
   onTouched = () => {};
@@ -130,6 +123,7 @@ export class RichTextEditorComponent
     private injector: Injector,
     private rteService: RichTextEditorService,
     private cdr: ChangeDetectorRef,
+    private ngZone: NgZone,
     @Optional() @Inject(RTE_LICENSE_KEY) private globalLicenseKey: string
   ) {}
 
@@ -146,37 +140,40 @@ export class RichTextEditorComponent
   }
 
   ngAfterViewInit() {
-    // Add a small delay to ensure DOM is fully rendered
-    setTimeout(() => {
-      if (!this.isDestroyed) {
-        this.initEditor();
-      }
-    }, 100);
+    // Run outside Angular zone to prevent change detection issues
+    this.ngZone.runOutsideAngular(() => {
+      setTimeout(() => {
+        if (!this.isDestroyed) {
+          this.initEditor();
+        }
+      }, 100);
+    });
   }
 
   private initEditor() {
-    // Prepare the final configuration with our custom settings
-    const fullConfig = this.prepareConfiguration();
-    this._applyCustomStyles();
-
     try {
+      // Clean up any existing instance first
+      this.cleanupExistingEditor();
+
+      const fullConfig = this.prepareConfiguration();
+      this._applyCustomStyles();
+
+      // Create editor instance
       this.editorInstance = new RichTextEditor(
         this.editorContainer.nativeElement,
         fullConfig
       );
 
-      // Ensure image toolbar is properly configured after initialization
-      if (this.imageToolbarItems && this.editorInstance) {
-        this.updateImageToolbar();
-      }
-
+      // Set initial content
       if (this.value) {
         this.editorInstance.setHTMLCode(this.value);
       } else if (this.initialContent) {
         this.value = this.initialContent;
         this.editorInstance.setHTMLCode(this.initialContent);
-        this.onChange(this.initialContent);
-        this.onTouched();
+        this.ngZone.run(() => {
+          this.onChange(this.initialContent);
+          this.onTouched();
+        });
       }
 
       if (this.readonly && this.editorInstance?.setReadOnly) {
@@ -184,34 +181,30 @@ export class RichTextEditorComponent
       }
 
       this.setupEventListeners();
+
+      // Update image toolbar if needed
+      if (this.imageToolbarItems && this.editorInstance) {
+        this.updateImageToolbar();
+      }
     } catch (error) {
       console.error('[RTE] Failed to initialize editor:', error);
     }
   }
 
-  private updateImageToolbar() {
-    // Force update image toolbar configuration
-    if (this.editorInstance && this.imageToolbarItems) {
-      const hasSlash = this.imageToolbarItems.includes('/');
-      let imageToolbarString = '';
-
-      if (hasSlash) {
-        imageToolbarString = this.imageToolbarItems.join('');
-      } else {
-        imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
-      }
-
-      // Try multiple ways to set the image toolbar
-      if (this.editorInstance.config) {
-        this.editorInstance.config.controltoolbar_IMG = imageToolbarString;
-      }
-      
-      // Also try setting it directly
+  private cleanupExistingEditor() {
+    if (this.editorInstance) {
       try {
-        this.editorInstance.setConfig('controltoolbar_IMG', imageToolbarString);
+        // Remove all event listeners first
+        this.removeAllEventListeners();
+
+        // Try to destroy the editor instance
+        if (typeof this.editorInstance.destroy === 'function') {
+          this.editorInstance.destroy();
+        }
       } catch (e) {
-        // Some versions might not have setConfig
+        console.warn('[RTE] Error during editor cleanup:', e);
       }
+      this.editorInstance = null;
     }
   }
 
@@ -222,68 +215,107 @@ export class RichTextEditorComponent
       this.changeTimer = setTimeout(() => {
         if (this.isDestroyed || !this.editorInstance) return;
 
-        const html = this.editorInstance.getHTMLCode() || '';
-        const cleaned = html
-          .replace(/\u00A0/g, '')
-          .replace(/<[^>]+>/g, '')
-          .trim();
+        this.ngZone.run(() => {
+          try {
+            const html = this.editorInstance.getHTMLCode() || '';
+            this.value = html;
 
-        const prevValue = this.value;
-        this.value = html;
+            this.onChange(html);
+            this.onTouched();
 
-        // Always trigger form update, even if content looks same
-        this.onChange(html);
-        this.onTouched();
-
-        // Force validation cycle
-        if (this.ngControl?.control) {
-          const control = this.ngControl.control;
-          const finalValue = this.isTrulyEmpty(html) ? '' : html;
-          control.setValue(finalValue, { emitEvent: false }); // don't double emit
-          control.updateValueAndValidity();
-        }
-
-        if (prevValue && cleaned.length === 0) {
-          const control = this.ngControl?.control;
-          if (control) {
-            control.markAsTouched(); // Triggers UI error display
-            control.updateValueAndValidity(); // Forces validator re-run
+            if (this.ngControl?.control) {
+              const control = this.ngControl.control;
+              const finalValue = this.isTrulyEmpty(html) ? '' : html;
+              control.setValue(finalValue, { emitEvent: false });
+              control.updateValueAndValidity();
+            }
+          } catch (error) {
+            console.error('[RTE] Error in update handler:', error);
           }
-          if (this.editorInstance) {
-            this.editorInstance.setHTMLCode('<p><br></p>');
-          }
-        }
+        });
       }, 150);
     };
 
+    // Store event handlers for cleanup
     ['change', 'keyup', 'paste', 'input'].forEach((event) => {
       if (this.editorInstance && this.editorInstance.attachEvent) {
-        this.editorInstance.attachEvent(event, triggerUpdate);
+        const handler = triggerUpdate;
+        this.editorInstance.attachEvent(event, handler);
+        this.eventListeners.push({ event, handler });
       }
     });
 
     if (this.editorInstance && this.editorInstance.attachEvent) {
-      this.editorInstance.attachEvent('blur', () => {
-        this.onTouched();
+      const blurHandler = () => {
+        this.ngZone.run(() => {
+          this.onTouched();
+          const control = this.ngControl?.control;
+          if (control) {
+            control.markAsTouched();
+            control.updateValueAndValidity();
+          }
+        });
+      };
 
-        const control = this.ngControl?.control;
-        if (control) {
-          control.markAsTouched(); // Mark as touched for UI error display
-          control.updateValueAndValidity(); // Trigger validation re-run
-        }
-      });
+      this.editorInstance.attachEvent('blur', blurHandler);
+      this.eventListeners.push({ event: 'blur', handler: blurHandler });
 
-      // Listen for image selection to ensure toolbar appears
-      this.editorInstance.attachEvent('selectionchange', () => {
+      const selectionHandler = () => {
         setTimeout(() => {
           this.checkImageSelection();
         }, 100);
+      };
+
+      this.editorInstance.attachEvent('selectionchange', selectionHandler);
+      this.eventListeners.push({
+        event: 'selectionchange',
+        handler: selectionHandler,
       });
     }
   }
 
+  private removeAllEventListeners() {
+    if (this.editorInstance && this.editorInstance.detachEvent) {
+      this.eventListeners.forEach(({ event, handler }) => {
+        try {
+          this.editorInstance.detachEvent(event, handler);
+        } catch (e) {
+          // Ignore errors during event cleanup
+        }
+      });
+    }
+    this.eventListeners = [];
+  }
+
+  private updateImageToolbar() {
+    if (this.editorInstance && this.imageToolbarItems) {
+      const hasSlash = this.imageToolbarItems.includes('/');
+      let imageToolbarString = '';
+
+      if (hasSlash) {
+        imageToolbarString = this.imageToolbarItems.join('');
+      } else {
+        imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
+      }
+
+      if (this.editorInstance.config) {
+        this.editorInstance.config.controltoolbar_IMG = imageToolbarString;
+      }
+
+      try {
+        if (typeof this.editorInstance.setConfig === 'function') {
+          this.editorInstance.setConfig(
+            'controltoolbar_IMG',
+            imageToolbarString
+          );
+        }
+      } catch (e) {
+        // Some versions might not have setConfig
+      }
+    }
+  }
+
   private checkImageSelection() {
-    // Check if an image is selected and force toolbar update
     if (!this.editorInstance || this.isDestroyed) return;
 
     try {
@@ -293,8 +325,7 @@ export class RichTextEditorComponent
         if (selection && selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
           const container = range.commonAncestorContainer;
-          
-          // Check if we have an image selected
+
           let imgElement = null;
           if (container.nodeType === Node.ELEMENT_NODE) {
             imgElement = (container as Element).querySelector('img');
@@ -303,8 +334,8 @@ export class RichTextEditorComponent
           }
 
           if (imgElement && this.imageToolbarItems) {
-            // Force the editor to recognize the image selection
-            this.editorInstance.updateToolbar && this.editorInstance.updateToolbar();
+            this.editorInstance.updateToolbar &&
+              this.editorInstance.updateToolbar();
           }
         }
       }
@@ -319,9 +350,12 @@ export class RichTextEditorComponent
     if (this.editorInstance && !this.isDestroyed) {
       const current = this.editorInstance.getHTMLCode() || '';
 
-      // Only call setHTMLCode if content has *meaningfully* changed
       if (this.normalizeHtml(current) !== this.normalizeHtml(incomingValue)) {
-        this.editorInstance.setHTMLCode(incomingValue);
+        try {
+          this.editorInstance.setHTMLCode(incomingValue);
+        } catch (e) {
+          console.warn('[RTE] Error setting HTML code:', e);
+        }
       }
     }
   }
@@ -346,53 +380,115 @@ export class RichTextEditorComponent
   setDisabledState?(isDisabled: boolean): void {
     const shouldDisable = isDisabled || this.readonly;
     if (this.editorInstance?.setReadOnly && !this.isDestroyed) {
-      this.editorInstance.setReadOnly(shouldDisable);
+      try {
+        this.editorInstance.setReadOnly(shouldDisable);
+      } catch (e) {
+        console.warn('[RTE] Error setting disabled state:', e);
+      }
     }
   }
 
   ngOnDestroy() {
     this.isDestroyed = true;
-    this.rteService.clearCurrentEditor();
-    
-    // Clear any pending timers
+
+    // Clear timers
     if (this.changeTimer) {
       clearTimeout(this.changeTimer);
     }
+    if (this.domCleanupTimer) {
+      clearTimeout(this.domCleanupTimer);
+    }
 
-    // Safely destroy the editor instance
-    this.safelyDestroyEditor();
-    
-    // Clean up floating panels with retry mechanism
-    this.cleanupFloatingPanels();
+    // Clear service reference
+    this.rteService.clearCurrentEditor();
+
+    // Schedule cleanup outside Angular zone
+    this.ngZone.runOutsideAngular(() => {
+      // Immediate cleanup attempt
+      this.performCleanup();
+
+      // Schedule additional cleanup attempts
+      this.domCleanupTimer = setTimeout(() => {
+        this.performCleanup();
+      }, 100);
+    });
   }
 
-  private safelyDestroyEditor() {
+  private performCleanup() {
+    // Remove event listeners
+    this.removeAllEventListeners();
+
+    // Clean up editor instance
     if (this.editorInstance) {
       try {
-        // First try to properly destroy the editor
-        if (this.editorInstance.destroy) {
+        if (typeof this.editorInstance.destroy === 'function') {
           this.editorInstance.destroy();
         }
       } catch (error) {
-        console.warn('[RTE] Error during editor destroy:', error);
+        // Silently ignore destroy errors
       }
-      
-      // Clear the reference
       this.editorInstance = null;
+    }
+
+    // Clean up floating panels with safe DOM manipulation
+    this.safeCleanupFloatingPanels();
+  }
+
+  private safeCleanupFloatingPanels() {
+    try {
+      // Use querySelectorAll to find all floating panels
+      const selectors = [
+        'rte-floatpanel',
+        '.rte-floatpanel',
+        '.rte-floatpanel-paragraphop',
+        '[class*="rte-float"]',
+        '[class*="rte-popup"]',
+        '.rte-toolbar-float',
+        '.rte-dropdown-panel',
+      ];
+
+      selectors.forEach((selector) => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach((element) => {
+          try {
+            // Check if element still has a parent before removing
+            if (
+              element &&
+              element.parentNode &&
+              document.body.contains(element)
+            ) {
+              element.parentNode.removeChild(element);
+            }
+          } catch (e) {
+            // If removal fails, hide the element
+            if (element instanceof HTMLElement) {
+              element.style.display = 'none';
+              element.style.visibility = 'hidden';
+            }
+          }
+        });
+      });
+
+      // Also clean up any orphaned RTE elements
+      this.cleanupOrphanedElements();
+    } catch (error) {
+      // Silently ignore cleanup errors
     }
   }
 
-  private cleanupFloatingPanels() {
-    // Use requestAnimationFrame to ensure DOM operations happen at the right time
-    requestAnimationFrame(() => {
-      this.hideAllFloatPanels();
-      
-      // Retry cleanup after a short delay if needed
-      if (this.floatPanelCleanupAttempts < 3) {
-        this.floatPanelCleanupAttempts++;
-        setTimeout(() => {
-          this.hideAllFloatPanels();
-        }, 100 * this.floatPanelCleanupAttempts);
+  private cleanupOrphanedElements() {
+    // Clean up any RTE-related elements that might be orphaned
+    const rteElements = document.querySelectorAll(
+      '[id*="rte_"], [class*="rte_"]'
+    );
+    rteElements.forEach((element) => {
+      try {
+        // Check if element is orphaned (not in the document body)
+        if (!document.body.contains(element)) {
+          element.remove();
+        }
+      } catch (e) {
+        // Ignore removal errors
       }
     });
   }
@@ -414,12 +510,31 @@ export class RichTextEditorComponent
     return null;
   }
 
+  /**
+   * Enhanced empty check that considers images as content
+   */
   private isTrulyEmpty(html: string): boolean {
+    if (!html || html.trim() === '') return true;
+
     const div = document.createElement('div');
     div.innerHTML = html;
 
+    // Check for images
+    const hasImages = div.querySelectorAll('img').length > 0;
+    if (hasImages) return false;
+
+    // Check for videos
+    const hasVideos = div.querySelectorAll('video, iframe').length > 0;
+    if (hasVideos) return false;
+
+    // Check for other embedded content
+    const hasEmbeds = div.querySelectorAll('embed, object, audio').length > 0;
+    if (hasEmbeds) return false;
+
+    // Check for text content
     const text = div.textContent?.replace(/\u00A0/g, '').trim() || '';
 
+    // Clean HTML to check if only empty tags remain
     const cleaned = div.innerHTML
       .replace(/<br\s*\/?>/gi, '')
       .replace(/<div>(\s|&nbsp;)*<\/div>/gi, '')
@@ -433,34 +548,46 @@ export class RichTextEditorComponent
   private fixCharacterCount() {
     if (!this.editorInstance || this.isDestroyed) return;
 
-    const html = this.editorInstance.getHTMLCode() || '';
-    const div = document.createElement('div');
-    div.innerHTML = html;
+    try {
+      const html = this.editorInstance.getHTMLCode() || '';
+      const div = document.createElement('div');
+      div.innerHTML = html;
 
-    const text = div.textContent || '';
-    const count = text.replace(/\u00A0/g, '').trim().length;
+      const text = div.textContent || '';
+      const count = text.replace(/\u00A0/g, '').trim().length;
 
-    const counter =
-      this.editorContainer.nativeElement.querySelector('.character-count');
-    if (counter) {
-      counter.textContent = `characters: ${count}`;
+      const counter =
+        this.editorContainer.nativeElement.querySelector('.character-count');
+      if (counter) {
+        counter.textContent = `characters: ${count}`;
+      }
+    } catch (e) {
+      // Ignore character count errors
     }
   }
 
   getCharacterCount(): number {
-    const html = this.editorInstance?.getHTMLCode?.() || '';
-    const div = document.createElement('div');
-    div.innerHTML = html;
+    try {
+      const html = this.editorInstance?.getHTMLCode?.() || '';
+      const div = document.createElement('div');
+      div.innerHTML = html;
 
-    const text = div.textContent || '';
-    return text.replace(/\u00A0/g, '').trim().length;
+      const text = div.textContent || '';
+      return text.replace(/\u00A0/g, '').trim().length;
+    } catch (e) {
+      return 0;
+    }
   }
 
   get showError(): boolean {
     return (
       (!!this.ngControl?.control?.invalid &&
         !!this.ngControl?.control?.touched) ||
-      !!(this.ngControl?.control?.touched && this.value.length === 0)
+      !!(
+        this.ngControl?.control?.touched &&
+        this.value.length === 0 &&
+        this.isTrulyEmpty(this.value)
+      )
     );
   }
 
@@ -471,45 +598,36 @@ export class RichTextEditorComponent
     return this.errorMessages[firstKey] || 'Invalid field';
   }
 
-  // More comprehensive toolbar cleanup method
   private cleanToolbarString(toolbar: string): string {
     let cleaned = toolbar;
 
-    // Step 1: Remove :toggle and :dropdown (including any that might be attached to words)
+    // Remove :toggle and :dropdown
     cleaned = cleaned.replace(/:toggle/g, '').replace(/:dropdown/g, '');
 
-    // Step 2: Fix spacing issues that may have been created
+    // Fix spacing issues
     cleaned = cleaned
-      // Remove multiple commas
       .replace(/,+/g, ',')
-      // Remove commas at start/end of groups
       .replace(/\{,+/g, '{')
       .replace(/,+\}/g, '}')
-      // Remove multiple pipes
       .replace(/\|+/g, '|')
-      // Remove pipes at start/end of groups
       .replace(/\{\s*\|/g, '{')
       .replace(/\|\s*\}/g, '}')
-      // Remove empty groups
       .replace(/\{\s*\}/g, '')
-      // Clean up spaces
       .replace(/\s*,\s*/g, ',')
       .replace(/\s*\|\s*/g, '|')
       .replace(/\{\s+/g, '{')
       .replace(/\s+\}/g, '}');
 
-    // Step 3: Fix letter separation issue
-    // This regex finds patterns like "b,o,l,d" and converts them back to "bold"
+    // Fix letter separation issue
     cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
 
-    // Keep applying the fix until no more single-letter separations exist
     let previousCleaned = '';
     while (previousCleaned !== cleaned) {
       previousCleaned = cleaned;
       cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
     }
 
-    // Step 4: Process each section to fix missing commas between tools
+    // Process sections
     const sections = cleaned.split(/([/#])/);
     const processedSections: string[] = [];
 
@@ -523,27 +641,22 @@ export class RichTextEditorComponent
 
       if (!section.trim()) continue;
 
-      // Process groups within sections
       const groups = section.split('|');
       const processedGroups: string[] = [];
 
       for (let group of groups) {
-        // Remove braces temporarily to process content
         const hasBraces = group.includes('{') || group.includes('}');
         let content = group.replace(/[{}]/g, '').trim();
 
         if (!content) continue;
 
-        // Fix tools that got concatenated (e.g., "fontnamefontsizeinlinestyle")
-        // This happens when we remove :toggle between them
+        // Fix concatenated tool names
         content = content
-          // Add commas between known concatenated tool names
           .replace(/(?<=fontname)(?=fontsize)/g, ',')
           .replace(/(?<=fontsize)(?=inlinestyle)/g, ',')
           .replace(/(?<=inlinestyle)(?=lineheight)/g, ',')
           .replace(/(?<=paragraphs)(?=fontname)/g, ',')
           .replace(/(?<=paragraphstyle)(?=menu_)/g, ',')
-          // Fix specific concatenations
           .replace(/underlinefore/g, 'underline,fore')
           .replace(/forecolorback/g, 'forecolor,back')
           .replace(/backcolor/g, 'backcolor')
@@ -555,7 +668,6 @@ export class RichTextEditorComponent
           .replace(/insertimage/g, 'insertimage')
           .replace(/removeformat/g, 'removeformat');
 
-        // Clean up any double commas that might have been created
         content = content.replace(/,+/g, ',').trim();
 
         if (content) {
@@ -568,20 +680,15 @@ export class RichTextEditorComponent
       }
     }
 
-    // Step 5: Reassemble and do final cleanup
     cleaned = processedSections.join('');
 
-    // Final cleanup pass
+    // Final cleanup
     cleaned = cleaned
-      // Remove any remaining empty groups
       .replace(/\{\s*\}/g, '')
-      // Remove duplicate separators
       .replace(/\|+/g, '|')
       .replace(/\/+/g, '/')
       .replace(/#+/g, '#')
-      // Remove trailing/leading separators
       .replace(/^[|/#]+|[|/#]+$/g, '')
-      // Final whitespace cleanup
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -589,8 +696,6 @@ export class RichTextEditorComponent
   }
 
   private getMobileExpandedToolbar(): string {
-    // Define tools that are already in the basic mobile toolbar
-    // Based on RTE_DefaultConfig.toolbar_basic
     const basicMobileTools = [
       'paragraphs:dropdown',
       'paragraphs:toggle',
@@ -620,15 +725,12 @@ export class RichTextEditorComponent
     if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
       let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
 
-      // Remove basic mobile tools from the preset toolbar
       for (const tool of basicMobileTools) {
-        // Escape special regex characters in tool name
         const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
         fullToolbar = fullToolbar.replace(toolPattern, '');
       }
 
-      // Apply additional exclusions if any
       if (this.excludedToolbarItems.length) {
         for (const tool of this.excludedToolbarItems) {
           const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -637,19 +739,15 @@ export class RichTextEditorComponent
         }
       }
 
-      // Clean up the toolbar string with improved regex
       fullToolbar = this.cleanToolbarString(fullToolbar);
 
-      // Return the filtered toolbar, or fallback if empty
       return fullToolbar || this.getDefaultMobileExpandedToolbar();
     }
 
     return this.getDefaultMobileExpandedToolbar();
   }
 
-  // Separate method for default mobile expanded toolbar
   private getDefaultMobileExpandedToolbar(): string {
-    // Default expanded mobile toolbar - excluding tools already in basic toolbar
     return `{strike,subscript,superscript}|{forecolor,backcolor}|
           {justifyleft,justifycenter,justifyright,justifyfull}|
           {insertorderedlist,insertunorderedlist}|{outdent,indent}|
@@ -658,9 +756,6 @@ export class RichTextEditorComponent
           {find,replace}|{selectall,print,spellcheck}|{help}`;
   }
 
-  /**
-   * Prepare the final configuration for the editor instance
-   */
   private prepareConfiguration(): any {
     const baseConfig = { ...this.config };
 
@@ -680,7 +775,6 @@ export class RichTextEditorComponent
         optionalIndex?: number,
         optionalFiles?: File[]
       ) => {
-        // delegate to the parent‐supplied handler
         this.fileUploadHandler(file, callback, optionalIndex, optionalFiles);
       },
       content_changed_callback: () => this.fixCharacterCount(),
@@ -692,16 +786,14 @@ export class RichTextEditorComponent
       contentCssUrl: '',
       toolbarMobile: 'basic',
       subtoolbar_more_mobile: this.getMobileExpandedToolbar(),
-      // Image selection configuration
       showControlBoxOnImageSelection: true,
       enableImageFloatStyle: true,
       contentCSSText: `
-      /* TODO: use @import for your css */
-
+      /* Custom styles */
       body {
         overflow-y: hidden;
         padding: 0px;
-        margin: 0px
+        margin: 0px;
       }
 
       body, table, p, div {
@@ -711,356 +803,12 @@ export class RichTextEditorComponent
         line-height: 1.6;
       }
 
-      a {
-        color: #377dff;
-        text-decoration: none;
-        -webkit-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-        -moz-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-        -o-transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-        transition: color 0.2s ease 0s, text-decoration 0.2s ease 0s;
-      }
-
-      ::selection {
-        background: #b5d6fd;
-        color: #000030;
-      }
-
-      /*RTE_DefaultConfig.items_InlineClasses*/
-      .my-cls-mark {
-        background-color: yellow;
-        font-weight: bold;
-      }
-
-      .my-cls-warning {
-        background-color: orange;
-        color: white;
-        font-weight: bold;
-      }
-      /*RTE_DefaultConfig.items_ParagraphClasses*/
-      .my-cls-quote {
-        margin: 10px;
-        padding-left: 10px;
-        border-left: dashed 1px red;
-        font-style: italic;
-      }
-
-      .my-cls-largecenter {
-        font-size: 1.5em;
-        font-weight: bold;
-        text-align: center;
-        margin: 10px;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      [__rte_selected_hover__] {
-        background-color: #b5d6fd;
-      }
-
-      [__rte_selected_cell] {
-        background-color: #b5d6fd;
-      }
-
-      [__rte_selected_hover] {
-        background: #b5d6fd;
-        color: #000;
-      }
-
-      .rte-toggleborder [__rte_selected_block] {
-        /*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
-        /*border-radius: 1px;*/
-        /*outline: 0.5px solid #377dff99;*/
-        border-right:solid 1px #377dff;
-      }
-
-      .rte-toggleborder blockquote[__rte_selected_block] {
-        /*box-shadow: 0 0 0 0.5px #377dff;*/ /*not work well for FireFox*/
-        /*border-radius: 1px;*/
-        outline: none;
-      }
-
-      .rte-toggleborder td[__rte_selected_block] {
-        box-shadow: none !important;
-      }
-
-      table {
-        border-spacing: 0;
-        border-collapse: collapse;
-      }
-
-        table:not([width]) {
-          width: 100%;
-        }
-
-        table[border="0"] td, table:not([border]) td, table[border="0"] th, table:not([border]) th {
-          border: 1px solid #ddd;
-        }
-
-      thead {
-        background-color: #eee;
-      }
-
-      .table > tbody > tr > td, .table > tbody > tr > th, .table > tfoot > tr > td, .table > tfoot > tr > th, .table > thead > tr > td, .table > thead > tr > th {
-        padding: 8px;
-        line-height: 1.42857143;
-        vertical-align: top;
-        border-top: 1px solid #ddd;
-      }
-
-      video-container {
-        position: relative
-      }
-
-        video-container:after {
-          content: '';
-          display: block;
-          position: absolute;
-          z-index: 1;
-          left: 0px;
-          top: 0px;
-          right: 0px;
-          bottom: 0px;
-          background-color: rgba(128,128,128,0.2);
-        }
-
-      blockquote {
-        border-left: 3px solid #ddd;
-        padding: 5px 0 5px 10px;
-        margin: 15px 0 15px 15px;
-      }
-
-
       img {
         cursor: default;
       }
-
-
-
-
-      .dp-highlighter {
-        font-family: "Consolas", "Courier New", Courier, mono, serif;
-        font-size: 12px;
-        background-color: #E7E5DC;
-        width: 99%;
-        overflow: auto;
-        margin: 18px 0 18px 0 !important;
-        padding-top: 1px; /* adds a little border on top when controls are hidden */
-      }
-
-        /* clear styles */
-        .dp-highlighter ol,
-        .dp-highlighter ol li,
-        .dp-highlighter ol li span {
-          margin: 0;
-          padding: 0;
-          border: none;
-        }
-
-        .dp-highlighter a,
-        .dp-highlighter a:hover {
-          background: none;
-          border: none;
-          padding: 0;
-          margin: 0;
-        }
-
-        .dp-highlighter .bar {
-          padding-left: 45px;
-        }
-
-        .dp-highlighter.collapsed .bar,
-        .dp-highlighter.nogutter .bar {
-          padding-left: 0px;
-        }
-
-        .dp-highlighter ol {
-          list-style: decimal; /* for ie */
-          background-color: #fff;
-          margin: 0px 0px 1px 45px !important; /* 1px bottom margin seems to fix occasional Firefox scrolling */
-          padding: 0px;
-          color: #5C5C5C;
-        }
-
-        .dp-highlighter.nogutter ol,
-        .dp-highlighter.nogutter ol li {
-          list-style: none !important;
-          margin-left: 0px !important;
-        }
-
-        .dp-highlighter ol li,
-        .dp-highlighter .columns div {
-          list-style: decimal-leading-zero; /* better look for others, override cascade from OL */
-          list-style-position: outside !important;
-          border-left: 3px solid #6CE26C;
-          background-color: #F8F8F8;
-          color: #5C5C5C;
-          padding: 0 3px 0 10px !important;
-          margin: 0 !important;
-        }
-
-        .dp-highlighter.nogutter ol li,
-        .dp-highlighter.nogutter .columns div {
-          border: 0;
-        }
-
-        .dp-highlighter .columns {
-          background-color: #F8F8F8;
-          color: gray;
-          overflow: hidden;
-          width: 100%;
-        }
-
-          .dp-highlighter .columns div {
-            padding-bottom: 5px;
-          }
-
-        .dp-highlighter ol li.alt {
-          background-color: #FFF;
-          color: inherit;
-        }
-
-        .dp-highlighter ol li span {
-          color: black;
-          background-color: inherit;
-        }
-
-        /* Adjust some properties when collapsed */
-
-        .dp-highlighter.collapsed ol {
-          margin: 0px;
-        }
-
-          .dp-highlighter.collapsed ol li {
-            display: none;
-          }
-
-        /* Additional modifications when in print-view */
-
-        .dp-highlighter.printing {
-          border: none;
-        }
-
-          .dp-highlighter.printing .tools {
-            display: none !important;
-          }
-
-          .dp-highlighter.printing li {
-            display: list-item !important;
-          }
-
-        /* Styles for the tools */
-
-        .dp-highlighter .tools {
-          padding: 3px 8px 3px 10px;
-          font: 9px Verdana, Geneva, Arial, Helvetica, sans-serif;
-          color: silver;
-          background-color: #f8f8f8;
-          padding-bottom: 10px;
-          border-left: 3px solid #6CE26C;
-        }
-
-        .dp-highlighter.nogutter .tools {
-          border-left: 0;
-        }
-
-        .dp-highlighter.collapsed .tools {
-          border-bottom: 0;
-        }
-
-        .dp-highlighter .tools a {
-          font-size: 9px;
-          color: #a0a0a0;
-          background-color: inherit;
-          text-decoration: none;
-          margin-right: 10px;
-        }
-
-          .dp-highlighter .tools a:hover {
-            color: red;
-            background-color: inherit;
-            text-decoration: underline;
-          }
-
-      /* About dialog styles */
-
-      .dp-about {
-        background-color: #fff;
-        color: #333;
-        margin: 0px;
-        padding: 0px;
-      }
-
-        .dp-about table {
-          width: 100%;
-          height: 100%;
-          font-size: 11px;
-          font-family: Tahoma, Verdana, Arial, sans-serif !important;
-        }
-
-        .dp-about td {
-          padding: 10px;
-          vertical-align: top;
-        }
-
-        .dp-about .copy {
-          border-bottom: 1px solid #ACA899;
-          height: 95%;
-        }
-
-        .dp-about .title {
-          color: red;
-          background-color: inherit;
-          font-weight: bold;
-        }
-
-        .dp-about .para {
-          margin: 0 0 4px 0;
-        }
-
-        .dp-about .footer {
-          background-color: #ECEADB;
-          color: #333;
-          border-top: 1px solid #fff;
-          text-align: right;
-        }
-
-        .dp-about .close {
-          font-size: 11px;
-          font-family: Tahoma, Verdana, Arial, sans-serif !important;
-          background-color: #ECEADB;
-          color: #333;
-          width: 60px;
-          height: 22px;
-        }
-
-      /* Language specific styles */
-
-      .dp-highlighter .comment, .dp-highlighter .comments {
-        color: #008200;
-        background-color: inherit;
-      }
-
-      .dp-highlighter .string {
-        color: blue;
-        background-color: inherit;
-      }
-
-      .dp-highlighter .keyword {
-        color: #069;
-        font-weight: bold;
-        background-color: inherit;
-      }
-
-      .dp-highlighter .preprocessor {
-        color: gray;
-        background-color: inherit;
-      }
-`,
+      `,
     };
 
-    // Configure the image toolbar
     if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
       const hasSlash = this.imageToolbarItems.includes('/');
       let imageToolbarString = '';
@@ -1072,7 +820,6 @@ export class RichTextEditorComponent
       }
 
       enhancedConfig.controltoolbar_IMG = imageToolbarString;
-      // Also try alternative property names that might be used by different RTE versions
       enhancedConfig.imagecontrolbar = imageToolbarString;
       enhancedConfig.image_toolbar = imageToolbarString;
     }
@@ -1086,7 +833,6 @@ export class RichTextEditorComponent
           fullToolbar = fullToolbar.replace(toolPattern, '');
         }
 
-        // Clean double pipes, commas, or braces
         fullToolbar = this.cleanToolbarString(fullToolbar);
       }
 
@@ -1097,18 +843,14 @@ export class RichTextEditorComponent
     return enhancedConfig;
   }
 
-  /**
-   * Apply custom styles to improve mobile experience
-   */
   private _applyCustomStyles() {
-    // Add a custom stylesheet to fix mobile issues if it doesn't exist yet
     if (!document.getElementById('rte-consistent-toolbar-styles')) {
       const styleEl = document.createElement('style');
       styleEl.id = 'rte-consistent-toolbar-styles';
       styleEl.innerHTML = `
         /* Custom mobile styles to fix toolbar */
         @media (max-width: 992px) {
-        .rte-toolbar-desktop,
+          .rte-toolbar-desktop,
           .rte-toolbar {
             display: flex !important;
             flex-wrap: wrap !important;
@@ -1126,11 +868,10 @@ export class RichTextEditorComponent
             height: 28px !important;
             margin: 2px !important;
           }
-            /* Hide mobile toolbar, always show desktop toolbar */
-           
-            .rte-toolbar-desktop {
-              display: flex !important;
-            }
+          
+          .rte-toolbar-desktop {
+            display: flex !important;
+          }
         }
 
         /* Force image toolbar visibility */
@@ -1139,6 +880,11 @@ export class RichTextEditorComponent
           opacity: 1 !important;
           visibility: visible !important;
         }
+
+        /* Prevent orphaned floating panels */
+        rte-floatpanel {
+          z-index: 10000;
+        }
       `;
       document.head.appendChild(styleEl);
     }
@@ -1146,6 +892,7 @@ export class RichTextEditorComponent
 
   public insertContentAtCursor(content: string) {
     if (this.readonly || this.isDestroyed) return;
+
     try {
       const iframe = this.editorContainer.nativeElement.querySelector('iframe');
 
@@ -1167,65 +914,22 @@ export class RichTextEditorComponent
 
       const html = this.editorInstance.getHTMLCode();
       this.value = html;
-      this.onChange(html);
-      this.onTouched();
 
-      if (this.ngControl?.control) {
-        this.ngControl.control.setValue(html, { emitEvent: false });
-        this.ngControl.control.updateValueAndValidity();
-      }
+      this.ngZone.run(() => {
+        this.onChange(html);
+        this.onTouched();
+
+        if (this.ngControl?.control) {
+          this.ngControl.control.setValue(html, { emitEvent: false });
+          this.ngControl.control.updateValueAndValidity();
+        }
+      });
     } catch (error) {
       console.error('[RTE] Failed to inject content into iframe:', error);
     }
   }
 
-  // Method to hide all floating panels
   public hideAllFloatPanels(): void {
-    try {
-      // Hide all float panels
-      const floatPanels = document.querySelectorAll('rte-floatpanel');
-      floatPanels.forEach((panel) => {
-        if (panel && panel.parentNode) {
-          try {
-            panel.parentNode.removeChild(panel);
-          } catch (e) {
-            // If removal fails, just hide it
-            if (panel instanceof HTMLElement) {
-              panel.style.display = 'none';
-            }
-          }
-        }
-      });
-
-      // Also try removing the specific paragraph operations panel
-      const paragraphOpPanel = document.querySelector(
-        '.rte-floatpanel-paragraphop'
-      );
-      if (paragraphOpPanel && paragraphOpPanel.parentNode) {
-        try {
-          paragraphOpPanel.parentNode.removeChild(paragraphOpPanel);
-        } catch (e) {
-          if (paragraphOpPanel instanceof HTMLElement) {
-            paragraphOpPanel.style.display = 'none';
-          }
-        }
-      }
-
-      // Clean up any other RTE-related floating elements
-      const rteFloatingElements = document.querySelectorAll('[class*="rte-float"], [class*="rte-popup"]');
-      rteFloatingElements.forEach((el) => {
-        if (el && el.parentNode) {
-          try {
-            el.parentNode.removeChild(el);
-          } catch (e) {
-            if (el instanceof HTMLElement) {
-              el.style.display = 'none';
-            }
-          }
-        }
-      });
-    } catch (error) {
-      console.warn('[RTE] Error cleaning up float panels:', error);
-    }
+    this.safeCleanupFloatingPanels();
   }
 }
