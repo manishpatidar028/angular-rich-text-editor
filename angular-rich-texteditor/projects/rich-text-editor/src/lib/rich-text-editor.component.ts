@@ -82,6 +82,7 @@ export class RichTextEditorComponent
   @Input() imageToolbarItems: (RTEImageTool | '/')[] | null = null;
   @Input() excludedToolbarItems: string[] = [];
 
+  @Input() initialContent = '';
   @Input() errorMessages: { [key: string]: string } = {
     required: 'This field is required.',
   };

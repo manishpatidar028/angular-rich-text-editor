@@ -1,7 +1,7 @@
 <h2>Test Rich Text Editor 🧪</h2>
 <button (click)="injectSignature()">INSERT</button>
 
-<lib-rich-text-editor
+<!-- <lib-rich-text-editor
   [rtePreset]="'FULL'"
   [imageToolbarItems]="['menu_controljustify','imagestyle', 'delete']"
   [excludedToolbarItems]="['insertvideo', 'insertgallery']"  [fileUploadHandler]="onRteFileUpload"
@@ -11,8 +11,43 @@
 
   required
   [errorMessages]="{ required: 'Please enter a description.' }"
-></lib-rich-text-editor>
+></lib-rich-text-editor> -->
 
+<!-- <app-shared-rich-text-editor
+        #richTextEditor
+        name="body"
+        [initialContent]="content"
+        [(ngModel)]="content"
+        (contentChanged)="valueChange()"
+      /> -->
+<!-- <app-rte-wrapper
+    name="description"
+    [(ngModel)]="content"
+    [config]="{
+      height: 400,
+      placeholder: 'Enter your description here...',
+      showCharacterCount: true,
+      showWordCount: true,
+      maxLength: 5000
+    }"
+    [preset]="'FULL'"
+    [showHeader]="true"
+    [showFooter]="true"
+    required>
+  </app-rte-wrapper> -->
+  <app-rte-wrapper-v2
+  name="description"
+  [(ngModel)]="content"
+  
+  [wrapperConfig]="{
+    height: 400,
+    placeholder: 'Enter description...',
+    showCharacterCount: true,
+    theme: 'bordered',
+  }"
+    [preset]="'FULL'"
+  (ngModelChange)="valueChange()"
+  required></app-rte-wrapper-v2>
 <hr />
 <h4>Output:</h4>
 <div [innerHTML]="content"></div>
