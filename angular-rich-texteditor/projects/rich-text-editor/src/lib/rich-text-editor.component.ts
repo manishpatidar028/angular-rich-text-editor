@@ -10,6 +10,7 @@ import {
   Injector,
   Inject,
   Optional,
+  ChangeDetectorRef,
 } from '@angular/core';
 import {
   ControlValueAccessor,
@@ -29,6 +30,7 @@ import {
 import { RTE_LICENSE_KEY } from './rich-text-editor-license.token';
 
 declare var RichTextEditor: any;
+
 /**
  * Configuration options for the toolbar
  */
@@ -39,6 +41,7 @@ export interface RichTextEditorConfig {
   toolbar_custom?: string;
   [key: string]: any;
 }
+
 @Component({
   selector: 'lib-rich-text-editor',
   template: `
@@ -117,6 +120,8 @@ export class RichTextEditorComponent
   private value: string = '';
   private ngControl: NgControl | null = null;
   private changeTimer: any;
+  private isDestroyed: boolean = false;
+  private floatPanelCleanupAttempts: number = 0;
 
   onChange = (value: any) => {};
   onTouched = () => {};
@@ -124,6 +129,7 @@ export class RichTextEditorComponent
   constructor(
     private injector: Injector,
     private rteService: RichTextEditorService,
+    private cdr: ChangeDetectorRef,
     @Optional() @Inject(RTE_LICENSE_KEY) private globalLicenseKey: string
   ) {}
 
@@ -142,7 +148,9 @@ export class RichTextEditorComponent
   ngAfterViewInit() {
     // Add a small delay to ensure DOM is fully rendered
     setTimeout(() => {
-      this.initEditor();
+      if (!this.isDestroyed) {
+        this.initEditor();
+      }
     }, 100);
   }
 
@@ -151,27 +159,69 @@ export class RichTextEditorComponent
     const fullConfig = this.prepareConfiguration();
     this._applyCustomStyles();
 
-    this.editorInstance = new RichTextEditor(
-      this.editorContainer.nativeElement,
-      fullConfig
-    );
+    try {
+      this.editorInstance = new RichTextEditor(
+        this.editorContainer.nativeElement,
+        fullConfig
+      );
 
-    if (this.value) {
-      this.editorInstance.setHTMLCode(this.value);
-    } else if (this.initialContent) {
-      this.value = this.initialContent;
-      this.editorInstance.setHTMLCode(this.initialContent);
-      this.onChange(this.initialContent);
-      this.onTouched();
-    }
+      // Ensure image toolbar is properly configured after initialization
+      if (this.imageToolbarItems && this.editorInstance) {
+        this.updateImageToolbar();
+      }
 
-    if (this.readonly && this.editorInstance?.setReadOnly) {
-      this.editorInstance.setReadOnly(true);
+      if (this.value) {
+        this.editorInstance.setHTMLCode(this.value);
+      } else if (this.initialContent) {
+        this.value = this.initialContent;
+        this.editorInstance.setHTMLCode(this.initialContent);
+        this.onChange(this.initialContent);
+        this.onTouched();
+      }
+
+      if (this.readonly && this.editorInstance?.setReadOnly) {
+        this.editorInstance.setReadOnly(true);
+      }
+
+      this.setupEventListeners();
+    } catch (error) {
+      console.error('[RTE] Failed to initialize editor:', error);
     }
+  }
+
+  private updateImageToolbar() {
+    // Force update image toolbar configuration
+    if (this.editorInstance && this.imageToolbarItems) {
+      const hasSlash = this.imageToolbarItems.includes('/');
+      let imageToolbarString = '';
+
+      if (hasSlash) {
+        imageToolbarString = this.imageToolbarItems.join('');
+      } else {
+        imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
+      }
+
+      // Try multiple ways to set the image toolbar
+      if (this.editorInstance.config) {
+        this.editorInstance.config.controltoolbar_IMG = imageToolbarString;
+      }
+      
+      // Also try setting it directly
+      try {
+        this.editorInstance.setConfig('controltoolbar_IMG', imageToolbarString);
+      } catch (e) {
+        // Some versions might not have setConfig
+      }
+    }
+  }
+
+  private setupEventListeners() {
     const triggerUpdate = () => {
       if (this.changeTimer) clearTimeout(this.changeTimer);
 
       this.changeTimer = setTimeout(() => {
+        if (this.isDestroyed || !this.editorInstance) return;
+
         const html = this.editorInstance.getHTMLCode() || '';
         const cleaned = html
           .replace(/\u00A0/g, '')
@@ -181,11 +231,11 @@ export class RichTextEditorComponent
         const prevValue = this.value;
         this.value = html;
 
-        // ✅ Always trigger form update, even if content looks same
+        // Always trigger form update, even if content looks same
         this.onChange(html);
         this.onTouched();
 
-        // ✅ Force validation cycle
+        // Force validation cycle
         if (this.ngControl?.control) {
           const control = this.ngControl.control;
           const finalValue = this.isTrulyEmpty(html) ? '' : html;
@@ -199,33 +249,77 @@ export class RichTextEditorComponent
             control.markAsTouched(); // Triggers UI error display
             control.updateValueAndValidity(); // Forces validator re-run
           }
-          this.editorInstance.setHTMLCode('<p><br></p>');
+          if (this.editorInstance) {
+            this.editorInstance.setHTMLCode('<p><br></p>');
+          }
         }
       }, 150);
     };
 
     ['change', 'keyup', 'paste', 'input'].forEach((event) => {
-      this.editorInstance.attachEvent(event, triggerUpdate);
-    });
-
-    this.editorInstance.attachEvent('blur', () => {
-      this.onTouched();
-
-      const control = this.ngControl?.control;
-      if (control) {
-        control.markAsTouched(); // Mark as touched for UI error display
-        control.updateValueAndValidity(); // ✅ Trigger validation re-run
+      if (this.editorInstance && this.editorInstance.attachEvent) {
+        this.editorInstance.attachEvent(event, triggerUpdate);
       }
     });
+
+    if (this.editorInstance && this.editorInstance.attachEvent) {
+      this.editorInstance.attachEvent('blur', () => {
+        this.onTouched();
+
+        const control = this.ngControl?.control;
+        if (control) {
+          control.markAsTouched(); // Mark as touched for UI error display
+          control.updateValueAndValidity(); // Trigger validation re-run
+        }
+      });
+
+      // Listen for image selection to ensure toolbar appears
+      this.editorInstance.attachEvent('selectionchange', () => {
+        setTimeout(() => {
+          this.checkImageSelection();
+        }, 100);
+      });
+    }
+  }
+
+  private checkImageSelection() {
+    // Check if an image is selected and force toolbar update
+    if (!this.editorInstance || this.isDestroyed) return;
+
+    try {
+      const iframe = this.editorContainer.nativeElement.querySelector('iframe');
+      if (iframe?.contentWindow && iframe.contentDocument) {
+        const selection = iframe.contentWindow.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const container = range.commonAncestorContainer;
+          
+          // Check if we have an image selected
+          let imgElement = null;
+          if (container.nodeType === Node.ELEMENT_NODE) {
+            imgElement = (container as Element).querySelector('img');
+          } else if (container.parentElement) {
+            imgElement = container.parentElement.closest('img');
+          }
+
+          if (imgElement && this.imageToolbarItems) {
+            // Force the editor to recognize the image selection
+            this.editorInstance.updateToolbar && this.editorInstance.updateToolbar();
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore errors during selection check
+    }
   }
 
   writeValue(value: any): void {
     const incomingValue = value ?? this.initialContent ?? '';
     this.value = incomingValue;
-    if (this.editorInstance) {
+    if (this.editorInstance && !this.isDestroyed) {
       const current = this.editorInstance.getHTMLCode() || '';
 
-      // ✅ Only call setHTMLCode if content has *meaningfully* changed
+      // Only call setHTMLCode if content has *meaningfully* changed
       if (this.normalizeHtml(current) !== this.normalizeHtml(incomingValue)) {
         this.editorInstance.setHTMLCode(incomingValue);
       }
@@ -251,18 +345,56 @@ export class RichTextEditorComponent
 
   setDisabledState?(isDisabled: boolean): void {
     const shouldDisable = isDisabled || this.readonly;
-    if (this.editorInstance?.setReadOnly) {
+    if (this.editorInstance?.setReadOnly && !this.isDestroyed) {
       this.editorInstance.setReadOnly(shouldDisable);
     }
   }
 
   ngOnDestroy() {
+    this.isDestroyed = true;
     this.rteService.clearCurrentEditor();
-    if (this.editorInstance?.destroy) {
-      this.editorInstance.destroy();
+    
+    // Clear any pending timers
+    if (this.changeTimer) {
+      clearTimeout(this.changeTimer);
     }
-    this.hideAllFloatPanels();
-    clearTimeout(this.changeTimer);
+
+    // Safely destroy the editor instance
+    this.safelyDestroyEditor();
+    
+    // Clean up floating panels with retry mechanism
+    this.cleanupFloatingPanels();
+  }
+
+  private safelyDestroyEditor() {
+    if (this.editorInstance) {
+      try {
+        // First try to properly destroy the editor
+        if (this.editorInstance.destroy) {
+          this.editorInstance.destroy();
+        }
+      } catch (error) {
+        console.warn('[RTE] Error during editor destroy:', error);
+      }
+      
+      // Clear the reference
+      this.editorInstance = null;
+    }
+  }
+
+  private cleanupFloatingPanels() {
+    // Use requestAnimationFrame to ensure DOM operations happen at the right time
+    requestAnimationFrame(() => {
+      this.hideAllFloatPanels();
+      
+      // Retry cleanup after a short delay if needed
+      if (this.floatPanelCleanupAttempts < 3) {
+        this.floatPanelCleanupAttempts++;
+        setTimeout(() => {
+          this.hideAllFloatPanels();
+        }, 100 * this.floatPanelCleanupAttempts);
+      }
+    });
   }
 
   hasRequiredValidator(control: AbstractControl | null): boolean {
@@ -270,6 +402,7 @@ export class RichTextEditorComponent
     const result = control.validator({ value: null } as AbstractControl);
     return !!(result && result['required']);
   }
+
   validate(control: AbstractControl): ValidationErrors | null {
     const value = control?.value || '';
     const isEmpty = this.isTrulyEmpty(value);
@@ -298,7 +431,7 @@ export class RichTextEditorComponent
   }
 
   private fixCharacterCount() {
-    if (!this.editorInstance) return;
+    if (!this.editorInstance || this.isDestroyed) return;
 
     const html = this.editorInstance.getHTMLCode() || '';
     const div = document.createElement('div');
@@ -455,91 +588,6 @@ export class RichTextEditorComponent
     return cleaned;
   }
 
-  // Alternative approach: Complete rewrite that's more robust
-  private cleanToolbarStringV2(toolbar: string): string {
-    // First, remove all :toggle and :dropdown modifiers
-    let cleaned = toolbar.replace(/:(?:toggle|dropdown)/g, '');
-
-    // Split by major separators but keep them
-    const parts = cleaned.split(/([/#|{}])/);
-    const result: string[] = [];
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i].trim();
-
-      // Keep separators as-is
-      if (/^[/#|{}]$/.test(part)) {
-        result.push(part);
-        continue;
-      }
-
-      // Skip empty parts
-      if (!part) continue;
-
-      // Process tool names
-      // First, fix any comma-separated single letters (like "b,o,l,d")
-      let processed = part;
-      let prev = '';
-      while (prev !== processed) {
-        prev = processed;
-        processed = processed.replace(/\b([a-z]),([a-z])\b/g, '$1$2');
-      }
-
-      // Now split by commas and process each tool
-      const tools = processed
-        .split(',')
-        .map((t) => t.trim())
-        .filter((t) => t);
-
-      // Fix known concatenations
-      const fixedTools: string[] = [];
-      for (let tool of tools) {
-        // Fix specific known issues
-        tool = tool
-          .replace(/^underlinefore/, 'underline,fore')
-          .replace(/^forecolorback/, 'forecolor,back')
-          .replace(/^outdentsuperscript/, 'outdent,superscript')
-          .replace(/^insertlinkun/, 'insertlink,un')
-          .replace(/^unlinkinsert/, 'unlink,insert')
-          .replace(/^fontnamesize/, 'fontname,fontsize')
-          .replace(/^fontsizeinlinestyle/, 'fontsize,inlinestyle')
-          .replace(/^inlinestylelineheight/, 'inlinestyle,lineheight')
-          .replace(/^paragraphstylemenu_/, 'paragraphstyle,menu_');
-
-        // Split if we created multiple tools
-        if (tool.includes(',')) {
-          fixedTools.push(...tool.split(',').map((t) => t.trim()));
-        } else {
-          fixedTools.push(tool);
-        }
-      }
-
-      // Add the processed tools
-      if (fixedTools.length > 0) {
-        result.push(fixedTools.join(','));
-      }
-    }
-
-    // Join everything back together
-    cleaned = result.join('');
-
-    // Final cleanup
-    cleaned = cleaned
-      .replace(/\{\}/g, '') // Remove empty groups
-      .replace(/\|+/g, '|') // Remove duplicate pipes
-      .replace(/\/+/g, '/') // Remove duplicate slashes
-      .replace(/#+/g, '#') // Remove duplicate hashes
-      .replace(/\{,/g, '{') // Remove commas after opening brace
-      .replace(/,\}/g, '}') // Remove commas before closing brace
-      .replace(/^[|/#]+|[|/#]+$/g, '') // Remove leading/trailing separators
-      .trim();
-
-    return cleaned;
-  }
-
-  // Add this new method to generate expanded mobile toolbar
-  // Add this new method to generate expanded mobile toolbar
-
   private getMobileExpandedToolbar(): string {
     // Define tools that are already in the basic mobile toolbar
     // Based on RTE_DefaultConfig.toolbar_basic
@@ -609,6 +657,7 @@ export class RichTextEditorComponent
           {cut,copy,paste,pastetext,pasteword}|
           {find,replace}|{selectall,print,spellcheck}|{help}`;
   }
+
   /**
    * Prepare the final configuration for the editor instance
    */
@@ -643,7 +692,10 @@ export class RichTextEditorComponent
       contentCssUrl: '',
       toolbarMobile: 'basic',
       subtoolbar_more_mobile: this.getMobileExpandedToolbar(),
-      contentCSSText: `,
+      // Image selection configuration
+      showControlBoxOnImageSelection: true,
+      enableImageFloatStyle: true,
+      contentCSSText: `
       /* TODO: use @import for your css */
 
       body {
@@ -1008,6 +1060,23 @@ export class RichTextEditorComponent
 `,
     };
 
+    // Configure the image toolbar
+    if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
+      const hasSlash = this.imageToolbarItems.includes('/');
+      let imageToolbarString = '';
+
+      if (hasSlash) {
+        imageToolbarString = this.imageToolbarItems.join('');
+      } else {
+        imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
+      }
+
+      enhancedConfig.controltoolbar_IMG = imageToolbarString;
+      // Also try alternative property names that might be used by different RTE versions
+      enhancedConfig.imagecontrolbar = imageToolbarString;
+      enhancedConfig.image_toolbar = imageToolbarString;
+    }
+
     if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
       let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
 
@@ -1020,18 +1089,7 @@ export class RichTextEditorComponent
         // Clean double pipes, commas, or braces
         fullToolbar = this.cleanToolbarString(fullToolbar);
       }
-      if (this.imageToolbarItems && Array.isArray(this.imageToolbarItems)) {
-        const hasSlash = this.imageToolbarItems.includes('/');
-        let imageToolbarString = '';
 
-        if (hasSlash) {
-          imageToolbarString = this.imageToolbarItems.join('');
-        } else {
-          imageToolbarString = `{${this.imageToolbarItems.join(',')}}`;
-        }
-
-        enhancedConfig.controltoolbar_IMG = imageToolbarString;
-      }
       enhancedConfig.toolbar = 'custom';
       enhancedConfig.toolbar_custom = fullToolbar;
     }
@@ -1074,13 +1132,20 @@ export class RichTextEditorComponent
               display: flex !important;
             }
         }
+
+        /* Force image toolbar visibility */
+        .rte-image-controlbox {
+          display: block !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
       `;
       document.head.appendChild(styleEl);
     }
   }
 
   public insertContentAtCursor(content: string) {
-    if (this.readonly) return;
+    if (this.readonly || this.isDestroyed) return;
     try {
       const iframe = this.editorContainer.nativeElement.querySelector('iframe');
 
@@ -1116,20 +1181,51 @@ export class RichTextEditorComponent
 
   // Method to hide all floating panels
   public hideAllFloatPanels(): void {
-    // Hide all float panels
-    const floatPanels = document.querySelectorAll('rte-floatpanel');
-    floatPanels.forEach((panel) => {
-      if (panel instanceof HTMLElement) {
-        panel.style.display = 'none';
-      }
-    });
+    try {
+      // Hide all float panels
+      const floatPanels = document.querySelectorAll('rte-floatpanel');
+      floatPanels.forEach((panel) => {
+        if (panel && panel.parentNode) {
+          try {
+            panel.parentNode.removeChild(panel);
+          } catch (e) {
+            // If removal fails, just hide it
+            if (panel instanceof HTMLElement) {
+              panel.style.display = 'none';
+            }
+          }
+        }
+      });
 
-    // Also try removing the specific paragraph operations panel
-    const paragraphOpPanel = document.querySelector(
-      '.rte-floatpanel-paragraphop'
-    );
-    if (paragraphOpPanel instanceof HTMLElement) {
-      paragraphOpPanel.style.display = 'none';
+      // Also try removing the specific paragraph operations panel
+      const paragraphOpPanel = document.querySelector(
+        '.rte-floatpanel-paragraphop'
+      );
+      if (paragraphOpPanel && paragraphOpPanel.parentNode) {
+        try {
+          paragraphOpPanel.parentNode.removeChild(paragraphOpPanel);
+        } catch (e) {
+          if (paragraphOpPanel instanceof HTMLElement) {
+            paragraphOpPanel.style.display = 'none';
+          }
+        }
+      }
+
+      // Clean up any other RTE-related floating elements
+      const rteFloatingElements = document.querySelectorAll('[class*="rte-float"], [class*="rte-popup"]');
+      rteFloatingElements.forEach((el) => {
+        if (el && el.parentNode) {
+          try {
+            el.parentNode.removeChild(el);
+          } catch (e) {
+            if (el instanceof HTMLElement) {
+              el.style.display = 'none';
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('[RTE] Error cleaning up float panels:', error);
     }
   }
 }
