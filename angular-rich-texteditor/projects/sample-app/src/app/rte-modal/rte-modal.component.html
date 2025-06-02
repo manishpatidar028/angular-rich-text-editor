@@ -1,0 +1,23 @@
+<div class="modal-backdrop">
+  <div class="modal">
+    <h3>Edit Content 📝</h3>
+    <button (click)="injectSignature()">INSERT SIGNATURE</button>
+    <button (click)="injectSignature2()">INSERT SIGNATURE Second</button>
+    <lib-rich-text-editor
+      [(ngModel)]="content"
+      [rtePreset]="'FULL'"
+      [imageToolbarItems]="['menu_controljustify','imagestyle', 'delete']"
+      [excludedToolbarItems]="['insertvideo', 'insertgallery', 'insertcode','toggle_paragraphop', 'paragraphs', 'paragraphs:toggle', 'paragraphs:dropdown']"
+      [fileUploadHandler]="onFileUpload"
+      [initialContent]="content"
+      [enableImageUpload]="true"
+      required
+      [errorMessages]="{ required: 'Please enter a description.' }"
+    ></lib-rich-text-editor>
+
+    <div class="modal-actions">
+      <button (click)="close.emit()">Cancel</button>
+      <button (click)="onSave()">Save</button>
+    </div>
+  </div>
+</div>

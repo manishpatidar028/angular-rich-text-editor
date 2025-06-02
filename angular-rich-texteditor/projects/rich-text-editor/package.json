@@ -1,6 +1,6 @@
 {
   "name": "angular-rich-text-editor",
-  "version": "1.0.18",
+  "version": "1.0.31",
   "description": "A lightweight, configurable rich-text editor component for Angular applications.",
   "author": "Manish Patidar <manishpatidar028@gmail.com>",
   "license": "MIT",

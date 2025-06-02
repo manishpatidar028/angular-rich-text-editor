@@ -1,18 +1,11 @@
-<h2>Test Rich Text Editor 🧪</h2>
-<button (click)="injectSignature()">INSERT</button>
-
-<lib-rich-text-editor
-  [rtePreset]="'FULL'"
-  [imageToolbarItems]="['menu_controljustify','imagestyle', 'delete']"
-  [excludedToolbarItems]="['insertvideo', 'insertgallery']"  [fileUploadHandler]="onRteFileUpload"
-  [(ngModel)]="content"
-    [fileUploadHandler]="onRteFileUpload"
-  [enableImageUpload]="true"
-
-  required
-  [errorMessages]="{ required: 'Please enter a description.' }"
-></lib-rich-text-editor>
-
+<button (click)="openEditorModal()">Open Rich Text Editor</button>
 <hr />
 <h4>Output:</h4>
 <div [innerHTML]="content"></div>
+
+<app-rte-modal
+  *ngIf="showModal"
+  [initialContent]="content"
+  (save)="handleModalSave($event)"
+  (close)="handleModalClose()"
+></app-rte-modal>
