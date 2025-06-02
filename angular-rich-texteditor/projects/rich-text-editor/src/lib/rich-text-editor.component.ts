@@ -29,6 +29,10 @@ import {
   RTEPreset,
 } from './rich-text-editor.constant';
 import { RTE_LICENSE_KEY } from './rich-text-editor-license.token';
+import { cleanToolbarString } from './utils/toolbar-cleaner';
+import { EditorEventManager } from './utils/editor-event-manager';
+import { safeCleanupFloatingPanels } from './utils/dom-cleanup';
+import { hasRequiredValidator, isTrulyEmpty } from './utils/validation-utils';
 
 declare var RichTextEditor: any;
 
@@ -107,6 +111,7 @@ export class RichTextEditorComponent
   @Input() enableVideoEmbed: boolean = false;
   @Input() readonly: boolean = false;
 
+  private eventManager: EditorEventManager | null = null;
   private editorInstance: any;
   private value: string = '';
   private ngControl: NgControl | null = null;
@@ -209,6 +214,10 @@ export class RichTextEditorComponent
   }
 
   private setupEventListeners() {
+    if (!this.editorInstance) return;
+
+    this.eventManager = new EditorEventManager(this.editorInstance);
+
     const triggerUpdate = () => {
       if (this.changeTimer) clearTimeout(this.changeTimer);
 
@@ -224,10 +233,9 @@ export class RichTextEditorComponent
             this.onTouched();
 
             if (this.ngControl?.control) {
-              const control = this.ngControl.control;
-              const finalValue = this.isTrulyEmpty(html) ? '' : html;
-              control.setValue(finalValue, { emitEvent: false });
-              control.updateValueAndValidity();
+              const finalValue = isTrulyEmpty(html) ? '' : html;
+              this.ngControl.control.setValue(finalValue, { emitEvent: false });
+              this.ngControl.control.updateValueAndValidity();
             }
           } catch (error) {
             console.error('[RTE] Error in update handler:', error);
@@ -236,55 +244,33 @@ export class RichTextEditorComponent
       }, 150);
     };
 
-    // Store event handlers for cleanup
-    ['change', 'keyup', 'paste', 'input'].forEach((event) => {
-      if (this.editorInstance && this.editorInstance.attachEvent) {
-        const handler = triggerUpdate;
-        this.editorInstance.attachEvent(event, handler);
-        this.eventListeners.push({ event, handler });
-      }
+    // Change-related events
+    this.eventManager.attachMany(
+      ['change', 'keyup', 'paste', 'input'],
+      triggerUpdate
+    );
+
+    // Blur
+    this.eventManager.attach('blur', () => {
+      this.ngZone.run(() => {
+        this.onTouched();
+        const control = this.ngControl?.control;
+        if (control) {
+          control.markAsTouched();
+          control.updateValueAndValidity();
+        }
+      });
     });
 
-    if (this.editorInstance && this.editorInstance.attachEvent) {
-      const blurHandler = () => {
-        this.ngZone.run(() => {
-          this.onTouched();
-          const control = this.ngControl?.control;
-          if (control) {
-            control.markAsTouched();
-            control.updateValueAndValidity();
-          }
-        });
-      };
-
-      this.editorInstance.attachEvent('blur', blurHandler);
-      this.eventListeners.push({ event: 'blur', handler: blurHandler });
-
-      const selectionHandler = () => {
-        setTimeout(() => {
-          this.checkImageSelection();
-        }, 100);
-      };
-
-      this.editorInstance.attachEvent('selectionchange', selectionHandler);
-      this.eventListeners.push({
-        event: 'selectionchange',
-        handler: selectionHandler,
-      });
-    }
+    // Selection change (image toolbar)
+    this.eventManager.attach('selectionchange', () => {
+      setTimeout(() => this.checkImageSelection(), 100);
+    });
   }
 
   private removeAllEventListeners() {
-    if (this.editorInstance && this.editorInstance.detachEvent) {
-      this.eventListeners.forEach(({ event, handler }) => {
-        try {
-          this.editorInstance.detachEvent(event, handler);
-        } catch (e) {
-          // Ignore errors during event cleanup
-        }
-      });
-    }
-    this.eventListeners = [];
+    this.eventManager?.detachAll();
+    this.eventManager = null;
   }
 
   private updateImageToolbar() {
@@ -431,118 +417,18 @@ export class RichTextEditorComponent
     }
 
     // Clean up floating panels with safe DOM manipulation
-    this.safeCleanupFloatingPanels();
-  }
-
-  private safeCleanupFloatingPanels() {
-    try {
-      // Use querySelectorAll to find all floating panels
-      const selectors = [
-        'rte-floatpanel',
-        '.rte-floatpanel',
-        '.rte-floatpanel-paragraphop',
-        '[class*="rte-float"]',
-        '[class*="rte-popup"]',
-        '.rte-toolbar-float',
-        '.rte-dropdown-panel',
-      ];
-
-      selectors.forEach((selector) => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach((element) => {
-          try {
-            // Check if element still has a parent before removing
-            if (
-              element &&
-              element.parentNode &&
-              document.body.contains(element)
-            ) {
-              element.parentNode.removeChild(element);
-            }
-          } catch (e) {
-            // If removal fails, hide the element
-            if (element instanceof HTMLElement) {
-              element.style.display = 'none';
-              element.style.visibility = 'hidden';
-            }
-          }
-        });
-      });
-
-      // Also clean up any orphaned RTE elements
-      this.cleanupOrphanedElements();
-    } catch (error) {
-      // Silently ignore cleanup errors
-    }
-  }
-
-  private cleanupOrphanedElements() {
-    // Clean up any RTE-related elements that might be orphaned
-    const rteElements = document.querySelectorAll(
-      '[id*="rte_"], [class*="rte_"]'
-    );
-    rteElements.forEach((element) => {
-      try {
-        // Check if element is orphaned (not in the document body)
-        if (!document.body.contains(element)) {
-          element.remove();
-        }
-      } catch (e) {
-        // Ignore removal errors
-      }
-    });
-  }
-
-  hasRequiredValidator(control: AbstractControl | null): boolean {
-    if (!control || !control.validator) return false;
-    const result = control.validator({ value: null } as AbstractControl);
-    return !!(result && result['required']);
+    safeCleanupFloatingPanels();
   }
 
   validate(control: AbstractControl): ValidationErrors | null {
     const value = control?.value || '';
-    const isEmpty = this.isTrulyEmpty(value);
+    const isEmpty = isTrulyEmpty(value);
 
-    if (this.hasRequiredValidator(control) && isEmpty) {
+    if (hasRequiredValidator(control) && isEmpty) {
       return { required: true };
     }
 
     return null;
-  }
-
-  /**
-   * Enhanced empty check that considers images as content
-   */
-  private isTrulyEmpty(html: string): boolean {
-    if (!html || html.trim() === '') return true;
-
-    const div = document.createElement('div');
-    div.innerHTML = html;
-
-    // Check for images
-    const hasImages = div.querySelectorAll('img').length > 0;
-    if (hasImages) return false;
-
-    // Check for videos
-    const hasVideos = div.querySelectorAll('video, iframe').length > 0;
-    if (hasVideos) return false;
-
-    // Check for other embedded content
-    const hasEmbeds = div.querySelectorAll('embed, object, audio').length > 0;
-    if (hasEmbeds) return false;
-
-    // Check for text content
-    const text = div.textContent?.replace(/\u00A0/g, '').trim() || '';
-
-    // Clean HTML to check if only empty tags remain
-    const cleaned = div.innerHTML
-      .replace(/<br\s*\/?>/gi, '')
-      .replace(/<div>(\s|&nbsp;)*<\/div>/gi, '')
-      .replace(/<p>(\s|&nbsp;)*<\/p>/gi, '')
-      .replace(/&nbsp;/gi, '')
-      .trim();
-
-    return !text && cleaned.length === 0;
   }
 
   private fixCharacterCount() {
@@ -586,7 +472,7 @@ export class RichTextEditorComponent
       !!(
         this.ngControl?.control?.touched &&
         this.value.length === 0 &&
-        this.isTrulyEmpty(this.value)
+        isTrulyEmpty(this.value)
       )
     );
   }
@@ -596,103 +482,6 @@ export class RichTextEditorComponent
     if (!errors) return null;
     const firstKey = Object.keys(errors)[0];
     return this.errorMessages[firstKey] || 'Invalid field';
-  }
-
-  private cleanToolbarString(toolbar: string): string {
-    let cleaned = toolbar;
-
-    // Remove :toggle and :dropdown
-    cleaned = cleaned.replace(/:toggle/g, '').replace(/:dropdown/g, '');
-
-    // Fix spacing issues
-    cleaned = cleaned
-      .replace(/,+/g, ',')
-      .replace(/\{,+/g, '{')
-      .replace(/,+\}/g, '}')
-      .replace(/\|+/g, '|')
-      .replace(/\{\s*\|/g, '{')
-      .replace(/\|\s*\}/g, '}')
-      .replace(/\{\s*\}/g, '')
-      .replace(/\s*,\s*/g, ',')
-      .replace(/\s*\|\s*/g, '|')
-      .replace(/\{\s+/g, '{')
-      .replace(/\s+\}/g, '}');
-
-    // Fix letter separation issue
-    cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
-
-    let previousCleaned = '';
-    while (previousCleaned !== cleaned) {
-      previousCleaned = cleaned;
-      cleaned = cleaned.replace(/\b([a-z]),(?=[a-z],|[a-z]\b)/g, '$1');
-    }
-
-    // Process sections
-    const sections = cleaned.split(/([/#])/);
-    const processedSections: string[] = [];
-
-    for (let i = 0; i < sections.length; i++) {
-      const section = sections[i];
-
-      if (section === '/' || section === '#') {
-        processedSections.push(section);
-        continue;
-      }
-
-      if (!section.trim()) continue;
-
-      const groups = section.split('|');
-      const processedGroups: string[] = [];
-
-      for (let group of groups) {
-        const hasBraces = group.includes('{') || group.includes('}');
-        let content = group.replace(/[{}]/g, '').trim();
-
-        if (!content) continue;
-
-        // Fix concatenated tool names
-        content = content
-          .replace(/(?<=fontname)(?=fontsize)/g, ',')
-          .replace(/(?<=fontsize)(?=inlinestyle)/g, ',')
-          .replace(/(?<=inlinestyle)(?=lineheight)/g, ',')
-          .replace(/(?<=paragraphs)(?=fontname)/g, ',')
-          .replace(/(?<=paragraphstyle)(?=menu_)/g, ',')
-          .replace(/underlinefore/g, 'underline,fore')
-          .replace(/forecolorback/g, 'forecolor,back')
-          .replace(/backcolor/g, 'backcolor')
-          .replace(/outdentsuperscript/g, 'outdent,superscript')
-          .replace(/insertlinkun/g, 'insertlink,un')
-          .replace(/unlinkinsert/g, 'unlink,insert')
-          .replace(/insertblockquote/g, 'insertblockquote')
-          .replace(/inserttable/g, 'inserttable')
-          .replace(/insertimage/g, 'insertimage')
-          .replace(/removeformat/g, 'removeformat');
-
-        content = content.replace(/,+/g, ',').trim();
-
-        if (content) {
-          processedGroups.push(hasBraces ? `{${content}}` : content);
-        }
-      }
-
-      if (processedGroups.length > 0) {
-        processedSections.push(processedGroups.join('|'));
-      }
-    }
-
-    cleaned = processedSections.join('');
-
-    // Final cleanup
-    cleaned = cleaned
-      .replace(/\{\s*\}/g, '')
-      .replace(/\|+/g, '|')
-      .replace(/\/+/g, '/')
-      .replace(/#+/g, '#')
-      .replace(/^[|/#]+|[|/#]+$/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return cleaned;
   }
 
   private getMobileExpandedToolbar(): string {
@@ -739,7 +528,7 @@ export class RichTextEditorComponent
         }
       }
 
-      fullToolbar = this.cleanToolbarString(fullToolbar);
+      fullToolbar = cleanToolbarString(fullToolbar);
 
       return fullToolbar || this.getDefaultMobileExpandedToolbar();
     }
@@ -833,7 +622,7 @@ export class RichTextEditorComponent
           fullToolbar = fullToolbar.replace(toolPattern, '');
         }
 
-        fullToolbar = this.cleanToolbarString(fullToolbar);
+        fullToolbar = cleanToolbarString(fullToolbar);
       }
 
       enhancedConfig.toolbar = 'custom';
@@ -930,6 +719,6 @@ export class RichTextEditorComponent
   }
 
   public hideAllFloatPanels(): void {
-    this.safeCleanupFloatingPanels();
+    safeCleanupFloatingPanels();
   }
 }
