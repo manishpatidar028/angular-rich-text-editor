@@ -81,6 +81,7 @@ export class RichTextEditorComponent
   @Input() rtePreset: RTEPreset | null = null;
   @Input() imageToolbarItems: (RTEImageTool | '/')[] | null = null;
   @Input() excludedToolbarItems: string[] = [];
+  @Input() initialContent: string = '';
 
   @Input() errorMessages: { [key: string]: string } = {
     required: 'This field is required.',
@@ -157,6 +158,11 @@ export class RichTextEditorComponent
 
     if (this.value) {
       this.editorInstance.setHTMLCode(this.value);
+    } else if (this.initialContent) {
+      this.value = this.initialContent;
+      this.editorInstance.setHTMLCode(this.initialContent);
+      this.onChange(this.initialContent);
+      this.onTouched();
     }
 
     if (this.readonly && this.editorInstance?.setReadOnly) {
@@ -214,7 +220,7 @@ export class RichTextEditorComponent
   }
 
   writeValue(value: any): void {
-    const incomingValue = value || '';
+    const incomingValue = value ?? this.initialContent ?? '';
     this.value = incomingValue;
     if (this.editorInstance) {
       const current = this.editorInstance.getHTMLCode() || '';
