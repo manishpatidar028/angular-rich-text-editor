@@ -520,15 +520,8 @@ export class RichTextEditorComponent
         fullToolbar = fullToolbar.replace(toolPattern, '');
       }
 
-      if (this.excludedToolbarItems.length) {
-        for (const tool of this.excludedToolbarItems) {
-          const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
-          fullToolbar = fullToolbar.replace(toolPattern, '');
-        }
-      }
-
-      fullToolbar = cleanToolbarString(fullToolbar);
+      // 🧼 Clean both desktop/mobile exclusions
+      fullToolbar = this.excludeToolbarItems(fullToolbar);
 
       return fullToolbar || this.getDefaultMobileExpandedToolbar();
     }
@@ -616,14 +609,7 @@ export class RichTextEditorComponent
     if (this.rtePreset && RTE_TOOLBAR_PRESETS[this.rtePreset]) {
       let fullToolbar = RTE_TOOLBAR_PRESETS[this.rtePreset];
 
-      if (this.excludedToolbarItems.length) {
-        for (const tool of this.excludedToolbarItems) {
-          const toolPattern = new RegExp(`\\b${tool}\\b`, 'g');
-          fullToolbar = fullToolbar.replace(toolPattern, '');
-        }
-
-        fullToolbar = cleanToolbarString(fullToolbar);
-      }
+      fullToolbar = this.excludeToolbarItems(fullToolbar);
 
       enhancedConfig.toolbar = 'custom';
       enhancedConfig.toolbar_custom = fullToolbar;
@@ -720,5 +706,17 @@ export class RichTextEditorComponent
 
   public hideAllFloatPanels(): void {
     safeCleanupFloatingPanels();
+  }
+
+  public excludeToolbarItems(toolbar: string): string {
+    if (!toolbar || !this.excludedToolbarItems?.length) return toolbar;
+
+    for (const tool of this.excludedToolbarItems) {
+      const escapedTool = tool.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const toolPattern = new RegExp(`\\b${escapedTool}\\b`, 'g');
+      toolbar = toolbar.replace(toolPattern, '');
+    }
+
+    return cleanToolbarString(toolbar);
   }
 }
