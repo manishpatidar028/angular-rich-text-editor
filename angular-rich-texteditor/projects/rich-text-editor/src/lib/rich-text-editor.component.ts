@@ -466,14 +466,14 @@ export class RichTextEditorComponent
   }
 
   get showError(): boolean {
-    return (
-      (!!this.ngControl?.control?.invalid &&
-        !!this.ngControl?.control?.touched) ||
-      !!(
-        this.ngControl?.control?.touched &&
-        this.value.length === 0 &&
-        isTrulyEmpty(this.value)
-      )
+    const control = this.ngControl?.control;
+    if (!control) return false;
+
+    const isRequired = hasRequiredValidator(control);
+    return !!(
+      control.invalid &&
+      control.touched &&
+      (isRequired || control.errors?.['required'])
     );
   }
 
