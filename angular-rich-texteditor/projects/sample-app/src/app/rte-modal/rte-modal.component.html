@@ -1,4 +1,4 @@
-<div class="modal-backdrop">
+<!-- <div class="modal-backdrop">
   <div class="modal">
     <h3>Edit Content 📝</h3>
     <button (click)="injectSignature()">INSERT SIGNATURE</button>
@@ -20,4 +20,13 @@
       <button (click)="onSave()">Save</button>
     </div>
   </div>
-</div>
+</div> -->
+
+
+ <app-shared-rich-text-editor
+        #richTextEditor
+        name="body"
+        [initialContent]="initialContent"
+        [(ngModel)]="content"
+        (contentChanged)="valueChange()"
+      />

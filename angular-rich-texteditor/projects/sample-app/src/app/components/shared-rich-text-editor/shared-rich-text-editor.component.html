@@ -1,0 +1,27 @@
+<!-- eslint-disable @angular-eslint/template/label-has-associated-control -->
+<div class="input-section font-size-14">
+  <label *ngIf="label" class="input-label-name font-size-14 fw-600">
+    {{ label }} <span *ngIf="errorMessage['required']">*</span>
+  </label>
+
+  <div class="rich-text-edtior">
+    <div class="editor-container">
+      <lib-rich-text-editor
+        
+        [formControl]="safeFormControl!"
+        [initialContent]="initialContent"
+        [rtePreset]="getConfigType"
+        [imageToolbarItems]="imageToolbarItems"
+        [excludedToolbarItems]="excludedToolbarItems"
+        [enableImageUpload]="enableImageUpload"
+        [enableVideoEmbed]="enableVideoEmbed"
+        [errorMessages]="errorMessage"
+        [readonly]="readOnly"
+        [fileUploadHandler]="safeUploadHandler"
+        [(ngModel)]="ngModel"
+        (ngModelChange)="onContentChanged($event)"
+        (blur)="onBlur()"
+      />
+    </div>
+  </div>
+</div>
