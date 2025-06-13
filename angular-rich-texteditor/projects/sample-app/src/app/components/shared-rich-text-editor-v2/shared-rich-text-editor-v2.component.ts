@@ -22,8 +22,8 @@ import {
   ReactiveFormsModule,
   NgControl,
 } from '@angular/forms';
-import { RichTextEditorComponent, RichTextEditorConfig, RichTextEditorModule, RTEImageTool, RTEPreset } from 'angular-rich-text-editor';
 import { Subject, takeUntil, debounceTime } from 'rxjs';
+import { RichTextEditorComponent, RichTextEditorConfig, RichTextEditorModule, RTEImageTool, RTEPreset } from '../../../../../rich-text-editor/src/public-api';
 
 export interface AppRteConfig {
   height?: number;
@@ -207,7 +207,7 @@ registerOnTouched(fn: any): void {
   }
 
   // Validator implementation
-  validate(control: AbstractControl): ValidationErrors | null {
+  validate(control: AbstractControl): any{
     const errors: ValidationErrors = {};
     if (this.isRequired(control) && this.isEmpty) {
       errors['required'] = true;
@@ -224,6 +224,7 @@ registerOnTouched(fn: any): void {
 
   // Content handling
   onEditorChange(content: any): void {
+    console.log('asdfv', content);
     // This is only for (ngModelChange), but real value sync is handled in ngAfterViewInit
     this.value = content;
     this.updateContentStats();
@@ -291,6 +292,7 @@ registerOnTouched(fn: any): void {
   }
 
   public clearContent(): void {
+    console.log('Clearing content');
     this.writeValue('');
     this.onEditorChange('');
   }

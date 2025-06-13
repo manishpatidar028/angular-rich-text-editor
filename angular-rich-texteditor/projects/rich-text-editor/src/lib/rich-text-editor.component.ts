@@ -128,6 +128,7 @@ export class RichTextEditorComponent
   ) {}
 
   ngOnInit() {
+    console.log('here');
     this.rteService.setCurrentEditor(this);
     try {
       this.ngControl = this.injector.get(NgControl);
@@ -163,15 +164,24 @@ export class RichTextEditorComponent
     if (this.readonly && this.editorInstance?.setReadOnly) {
       this.editorInstance.setReadOnly(true);
     }
+    // Replace the triggerUpdate function in initEditor() method with this:
     const triggerUpdate = () => {
       if (this.changeTimer) clearTimeout(this.changeTimer);
 
       this.changeTimer = setTimeout(() => {
         const html = this.editorInstance.getHTMLCode() || '';
+        
+        // ✅ Check if content has meaningful elements (images, videos, etc.) even if text is empty
+        const hasMediaContent = this.hasMediaContent(html);
+        
+        console.log('hasMediaContent', hasMediaContent);
         const cleaned = html
           .replace(/\u00A0/g, '')
           .replace(/<[^>]+>/g, '')
           .trim();
+
+        console.log('cleaned', cleaned);
+
 
         const prevValue = this.value;
         this.value = html;
@@ -188,7 +198,8 @@ export class RichTextEditorComponent
           control.updateValueAndValidity();
         }
 
-        if (prevValue && cleaned.length === 0) {
+        // ✅ Only reset to <p><br></p> if content is truly empty AND has no media content
+        if (prevValue && cleaned.length === 0 && !hasMediaContent) {
           const control = this.ngControl?.control;
           if (control) {
             control.markAsTouched(); // Triggers UI error display
@@ -204,6 +215,7 @@ export class RichTextEditorComponent
     });
 
     this.editorInstance.attachEvent('blur', () => {
+      console.log('here');
       this.onTouched();
 
       const control = this.ngControl?.control;
@@ -212,6 +224,16 @@ export class RichTextEditorComponent
         control.updateValueAndValidity(); // ✅ Trigger validation re-run
       }
     });
+  }
+
+  // Add this method to your RichTextEditorComponent class:
+  private hasMediaContent(html: string): boolean {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    
+    // Check for media elements that should preserve the content
+    const mediaElements = div.querySelectorAll('img, video, audio, iframe, embed, object, canvas, svg');
+    return mediaElements.length > 0;
   }
 
   writeValue(value: any): void {
@@ -275,9 +297,15 @@ export class RichTextEditorComponent
     return null;
   }
 
+  // Replace the existing isTrulyEmpty method with this:
   private isTrulyEmpty(html: string): boolean {
     const div = document.createElement('div');
     div.innerHTML = html;
+
+    // ✅ If there are any media elements, content is not empty
+    if (this.hasMediaContent(html)) {
+      return false;
+    }
 
     const text = div.textContent?.replace(/\u00A0/g, '').trim() || '';
 

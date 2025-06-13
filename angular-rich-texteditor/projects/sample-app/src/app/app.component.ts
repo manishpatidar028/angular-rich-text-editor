@@ -1,11 +1,7 @@
 import { Component, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterOutlet } from '@angular/router';
-import {
-  RichTextEditorComponent,
-  RichTextEditorModule,
-  RTE_LICENSE_KEY,
-} from 'rich-text-editor';
+
 import {
   RTE_TOOLBAR_PRESETS,
   RTEPreset,
@@ -13,6 +9,8 @@ import {
 import { SharedRichTextEditorComponent } from './components/shared-rich-text-editor/shared-rich-text-editor.component';
 import { RteWrapperComponent } from './components/shared-rich-text-editor-v1/shared-rich-text-editor-v1.component';
 import { AppRteWrapperComponent } from './components/shared-rich-text-editor-v2/shared-rich-text-editor-v2.component';
+import { RichTextEditorModule } from '../../../rich-text-editor/src/lib/rich-text-editor.module';
+import { RTE_LICENSE_KEY } from '../../../rich-text-editor/src/public-api';
 
 @Component({
   selector: 'app-root',
