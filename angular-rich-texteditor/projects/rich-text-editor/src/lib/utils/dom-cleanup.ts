@@ -14,7 +14,11 @@ export function safeCleanupFloatingPanels(): void {
       const elements = document.querySelectorAll(selector);
       elements.forEach((element) => {
         try {
-          if (element && element.parentNode && document.body.contains(element)) {
+          if (
+            element &&
+            element.parentNode &&
+            document.body.contains(element)
+          ) {
             element.parentNode.removeChild(element);
           }
         } catch (e) {
@@ -50,4 +54,19 @@ export function cleanupOrphanedElements(): void {
   } catch (e) {
     // Silent fail
   }
+}
+
+/**
+ * Monkey patch Node.prototype.removeChild to avoid NotFoundError
+ * when removing already-detached DOM elements.
+ */
+export function patchRemoveChildIfDetached(): void {
+  const originalRemoveChild = Node.prototype.removeChild;
+
+  Node.prototype.removeChild = function (this: Node, child: Node): Node {
+    if (child && child.parentNode === this) {
+      return originalRemoveChild.call(this, child);
+    }
+    return child;
+  } as typeof Node.prototype.removeChild;
 }

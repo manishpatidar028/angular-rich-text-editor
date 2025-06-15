@@ -31,7 +31,7 @@ import {
 import { RTE_LICENSE_KEY } from './rich-text-editor-license.token';
 import { cleanToolbarString } from './utils/toolbar-cleaner';
 import { EditorEventManager } from './utils/editor-event-manager';
-import { safeCleanupFloatingPanels } from './utils/dom-cleanup';
+import { patchRemoveChildIfDetached, safeCleanupFloatingPanels } from './utils/dom-cleanup';
 import { hasRequiredValidator, isTrulyEmpty } from './utils/validation-utils';
 
 declare var RichTextEditor: any;
@@ -133,6 +133,7 @@ export class RichTextEditorComponent
   ) {}
 
   ngOnInit() {
+    patchRemoveChildIfDetached();
     this.rteService.setCurrentEditor(this);
     try {
       this.ngControl = this.injector.get(NgControl);

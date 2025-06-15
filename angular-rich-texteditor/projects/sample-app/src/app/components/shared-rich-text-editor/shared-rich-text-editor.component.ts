@@ -71,7 +71,7 @@ export class SharedRichTextEditorComponent
   optionalFiles?: File[]
 ) => void;
 
-  @Input() public imageToolbarItems: Array<RTEImageTool | '/'> = [];
+  @Input() public imageToolbarItems: Array<RTEImageTool | '/'> = ['menu_controljustify', 'delete', 'imagestyle'];
   @Input() public excludedToolbarItems: string[] = [
     'paragraphs',
     'html2pdf',
