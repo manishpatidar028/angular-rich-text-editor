@@ -1,21 +1,21 @@
 # 📦 angular-rich-text-editor
 
-A powerful, fully-configurable **Angular wrapper** for [RichTextEditor.com](https://richtexteditor.com), built for modern apps. Supports both **Reactive & Template-Driven Forms**, **modal dialogs**, **file uploads**, custom toolbars, validation, content injection, and much more.
+A powerful, fully-configurable **Angular wrapper** for [RichTextEditor.com](https://richtexteditor.com), built for modern Angular apps. Supports both **Reactive & Template-Driven Forms**, **modals**, **file uploads**, **custom toolbars**, validation, dynamic content injection, and much more.
 
-> 🔥 Built for scalability, with real-world use cases and performance-optimized for Angular.
+> 🔥 Built for scalability, optimized for performance, and engineered for flexibility.
 
 ---
 
 ## ✨ Features
 
-- 🧩 FormControl & `[(ngModel)]` support
-- 📤 File/image upload with full control
-- 🧠 Presets and toolbar customization
-- 📱 Responsive toolbar with mobile fallbacks
-- 📌 Editor state access (get, set, insert, clear, etc.)
-- ✅ Validation (`required`, image/video presence)
-- 💬 Custom error messaging
-- 🚀 Easy integration inside **modals**, **shared components**, or **standalone forms**
+- 🧩 Works with `FormControl`, `[(ngModel)]`, and standalone forms
+- 📤 Customizable image/file upload
+- 🧠 Preset and dynamic toolbar options
+- 📱 Mobile-friendly toolbar responsiveness
+- ✅ Validation with custom messages
+- 💬 Full error messaging & touched state integration
+- 🔁 Public API for dynamic HTML manipulation
+- 🚀 Easy integration inside components or modals
 
 ---
 
@@ -29,20 +29,24 @@ npm install angular-rich-text-editor
 
 ## 🔧 Configuration
 
-> This library depends on the assets and scripts provided by RichTextEditor.com. You must include them in your Angular/Nx build.
+> This library depends on assets and runtime scripts from [RichTextEditor.com](https://richtexteditor.com). These must be added manually.
 
-### 1. Modify `angular.json` or `project.json`:
+### 1. Modify `angular.json` or `project.json`
 
 #### Scripts
 
+> ⚠️ Make sure to keep your existing script. Just **append** the following to the `"script"` array in your `angular.json` or `project.json`:
+
 ```json
 "scripts": [
- ...
+  ...
   "node_modules/angular-rich-text-editor/src/assets/richtexteditor/rte.js"
 ]
 ```
 
 #### Styles
+
+> ⚠️ Make sure to keep your existing styles. Just **append** the following to the `"styles"` array in your `angular.json` or `project.json`:
 
 ```json
 "styles": [
@@ -53,9 +57,12 @@ npm install angular-rich-text-editor
 
 #### Assets
 
+> 📁 To load the required runtime assets, **append** the following entry to the `"assets"` array in your `angular.json` or `project.json`.  
+> ✅ Don’t remove your existing asset entries — just add this below them:
+
 ```json
 "assets": [
- ...
+  ...,
   {
     "glob": "**/*",
     "input": "node_modules/angular-rich-text-editor/src/assets/richtexteditor",
@@ -64,22 +71,24 @@ npm install angular-rich-text-editor
 ]
 ```
 
+````
+
 ---
 
 ## 🧱 Module Import
 
-### With Angular Modules:
+### In a regular NgModule:
 
 ```ts
-import { RichTextEditorModule } from "angular-rich-text-editor";
+import { RichTextEditorModule } from 'angular-rich-text-editor';
 
 @NgModule({
   imports: [RichTextEditorModule],
 })
 export class YourModule {}
-```
+````
 
-### Standalone Components:
+### With standalone components:
 
 ```ts
 @Component({
@@ -93,131 +102,139 @@ export class YourModule {}
 
 ## 🧩 Usage Examples
 
-### 1. Basic Template-Driven Form
+### 1. Template-Driven Form
 
 ```html
-<lib-rich-text-editor [(ngModel)]="content" [rtePreset]="'FULL'" [enableImageUpload]="true" [fileUploadHandler]="handleFileUpload"></lib-rich-text-editor>
+<lib-rich-text-editor [(ngModel)]="content" [rtePreset]="'FULL'" [enableImageUpload]="true" [fileUploadHandler]="handleFileUpload" />
 ```
 
----
-
-### 2. Reactive Form Usage
+### 2. Reactive Form
 
 ```html
 <form [formGroup]="form">
-  <lib-rich-text-editor formControlName="description" [initialContent]="startingHTML" [enableVideoEmbed]="true"></lib-rich-text-editor>
+  <lib-rich-text-editor formControlName="description" [initialContent]="startingHTML" [enableVideoEmbed]="true" />
 </form>
 ```
 
----
-
-### 3. Inside a Modal
+### 3. In a Modal
 
 ```html
-<lib-rich-text-editor [(ngModel)]="content" [fileUploadHandler]="mockUpload" [excludedToolbarItems]="['insertvideo', 'insertcode']"></lib-rich-text-editor>
+<lib-rich-text-editor [(ngModel)]="content" [fileUploadHandler]="mockUpload" [excludedToolbarItems]="['insertvideo', 'insertcode']" />
 ```
 
----
-
-### 4. Wrapped Shared Component
+### 4. Shared Component Wrapper
 
 ```html
-<app-shared-rich-text-editor [(ngModel)]="emailBody" [imageToolbarItems]="['imagestyle', 'delete']" [excludedToolbarItems]="['html2pdf']" [fileUploadHandler]="uploadImage"></app-shared-rich-text-editor>
+<app-shared-rich-text-editor [(ngModel)]="emailBody" [imageToolbarItems]="['imagestyle', 'delete']" [excludedToolbarItems]="['html2pdf']" [fileUploadHandler]="uploadImage" />
 ```
 
 ---
 
 ## ⚙️ Inputs
 
-| Input                            | Type                                       | Description                    |
-| -------------------------------- | ------------------------------------------ | ------------------------------ |
-| `formControl`, `formControlName` | `FormControl`                              | Works with reactive forms      |
-| `[(ngModel)]`                    | `string`                                   | Supports template-driven forms |
-| `initialContent`                 | `string`                                   | Sets initial HTML content      |
-| `rtePreset`                      | `'BASIC' \| 'FULL' \| 'EMAIL' \| 'INLINE'` | Toolbar config preset          |
-| `imageToolbarItems`              | `Array<string \| '/'>`                     | Custom image toolbar items     |
-| `excludedToolbarItems`           | `string[]`                                 | Remove items from toolbar      |
-| `fileUploadHandler`              | `(file, cb, i?, all?) => void`             | Handle image upload            |
-| `enableImageUpload`              | `boolean`                                  | Toggle image uploads           |
-| `enableVideoEmbed`               | `boolean`                                  | Toggle video embedding         |
-| `readonly`                       | `boolean`                                  | Make the editor read-only      |
-| `errorMessages`                  | `{ [key: string]: string }`                | Custom validation messages     |
+| Input                            | Type                                                 | Description                           |
+| -------------------------------- | ---------------------------------------------------- | ------------------------------------- |
+| `formControl`, `formControlName` | `FormControl`                                        | Works with reactive forms             |
+| `[(ngModel)]`                    | `string`                                             | Supports template-driven forms        |
+| `initialContent`                 | `string`                                             | Set initial content as HTML string    |
+| `rtePreset`                      | `'BASIC' \| 'STANDARD' \| 'FULL' \| 'MINIMAL'`       | Select a toolbar preset configuration |
+| `imageToolbarItems`              | `Array<'menu_controlsize' \| 'imagecaption' \| ...>` | Configure image inline toolbar        |
+| `excludedToolbarItems`           | `string[]`                                           | Toolbar buttons to exclude            |
+| `fileUploadHandler`              | `(file, cb, i?, all?) => void`                       | Custom image/file upload handler      |
+| `enableImageUpload`              | `boolean`                                            | Enable/disable image uploading        |
+| `enableVideoEmbed`               | `boolean`                                            | Enable/disable video embedding        |
+| `readonly`                       | `boolean`                                            | Make editor read-only                 |
+| `errorMessages`                  | `{ [key: string]: string }`                          | Custom validation error messages      |
 
 ---
 
 ## 📤 Outputs
 
-| Output           | Type                   | Description                |
-| ---------------- | ---------------------- | -------------------------- |
-| `ngModelChange`  | `EventEmitter<string>` | Emits updated HTML content |
-| `contentChanged` | `EventEmitter<void>`   | Emits when content changes |
-| `blurEvent`      | `EventEmitter<void>`   | Emits on blur              |
-| `focusEvent`     | `EventEmitter<void>`   | Emits on focus             |
+| Output           | Type                   | Description                     |
+| ---------------- | ---------------------- | ------------------------------- |
+| `ngModelChange`  | `EventEmitter<string>` | Emits when HTML content updates |
+| `contentChanged` | `EventEmitter<void>`   | Emits after any content change  |
+| `blurEvent`      | `EventEmitter<void>`   | Emits on blur                   |
+| `focusEvent`     | `EventEmitter<void>`   | Emits on focus                  |
 
 ---
 
-## 🔓 Public Methods (via `RichTextEditorService`)
+## 🔓 Public Methods via `RichTextEditorService`
 
-Import the service in your component:
+Inject in your component:
 
 ```ts
 constructor(private rteService: RichTextEditorService) {}
 ```
 
-### Available Methods
-
-| Method                                     | Description                                   |
-| ------------------------------------------ | --------------------------------------------- |
-| `getContent(): string`                     | Get current HTML content                      |
-| `setContent(html: string): boolean`        | Set editor content                            |
-| `clearContent(): boolean`                  | Clears the editor                             |
-| `insertContentAtCursor(html: string)`      | Injects HTML at current cursor                |
-| `focus()`                                  | Focus the editor                              |
-| `executeCommand(cmd: string, value?: any)` | Exec command like `bold`, `insertImage`, etc. |
-| `getCharacterCount(): number`              | Returns character count                       |
-| `getWordCount(): number`                   | Returns word count                            |
-| `getSelectedText(): string`                | Returns selected text                         |
-| `isReadonly(): boolean`                    | Is editor read-only?                          |
-| `isAvailable(): boolean`                   | Is editor ready?                              |
-| `hideFloatingPanels()`                     | Hides all tool panels                         |
-| `removeLastPlaceholderImage()`             | Removes last uploaded `blob:`/`data:` image   |
+| Method                                     | Description                                    |
+| ------------------------------------------ | ---------------------------------------------- |
+| `getContent()`                             | Get current HTML from the editor               |
+| `setContent(html: string)`                 | Set HTML content programmatically              |
+| `clearContent()`                           | Clears all content                             |
+| `insertContentAtCursor(html: string)`      | Inject HTML at current cursor                  |
+| `focus()`                                  | Focus the editor                               |
+| `executeCommand(cmd: string, value?: any)` | Execute RichTextEditor command (bold, link...) |
+| `getCharacterCount()`                      | Get plain character count                      |
+| `getWordCount()`                           | Get plain word count                           |
+| `getSelectedText()`                        | Returns currently selected text                |
+| `isReadonly()`                             | Check if editor is read-only                   |
+| `isAvailable()`                            | Check if editor is ready                       |
+| `hideFloatingPanels()`                     | Hide open floating panels                      |
+| `removeLastPlaceholderImage()`             | Removes latest `blob:`/`data:` image inserted  |
 
 ---
 
 ## ✅ Validation Support
 
-You can validate if content is empty using:
+Supports `required` validation with:
 
-- `required` directive on template
-- Angular's `Validators.required` in reactive forms
+- Angular template validation (`required` directive)
+- Reactive validation (`Validators.required`)
 
-It checks:
+Checks:
 
-- text content
-- image presence
-- video presence
+- Empty text
+- Absence of image or video
 
 ---
 
 ## 🎨 Toolbar Presets
 
-| Preset   | Toolbar Style             |
-| -------- | ------------------------- |
-| `BASIC`  | Minimal for inline fields |
-| `FULL`   | Full editor experience    |
-| `EMAIL`  | Email-focused tools       |
-| `INLINE` | Inline editing UI         |
+You can select a predefined toolbar layout using the `rtePreset` input.
 
-Customize toolbar via:
+| Preset     | Toolbar Description                       |
+| ---------- | ----------------------------------------- |
+| `BASIC`    | Light inline editing options              |
+| `STANDARD` | Medium-complexity toolbar                 |
+| `FULL`     | Rich full-featured editing experience     |
+| `MINIMAL`  | Ultra-compact, minimal formatting buttons |
 
-- `excludedToolbarItems`
-- `imageToolbarItems`
+```ts
+export type RTEPreset = "BASIC" | "STANDARD" | "FULL" | "MINIMAL";
+```
+
+---
+
+## 🖼️ Image Toolbar Items
+
+Customize the image selection toolbar using the supported `RTEImageTool` values:
+
+```ts
+export type RTEImageTool = "menu_controlsize" | "imagecaption" | "controlalt" | "controlinsertlink" | "controleditlink" | "controlopenlink" | "controlunlink" | "menu_controljustify" | "imagestyle" | "delete";
+```
+
+#### Example:
+
+```html
+<lib-rich-text-editor [imageToolbarItems]="['menu_controljustify', 'imagestyle', 'delete']" />
+```
 
 ---
 
 ## 📁 File Upload Handler
 
-Write your own uploader:
+Custom uploader example:
 
 ```ts
 handleFileUpload(file: File, cb: (url: string | null) => void) {
@@ -225,7 +242,7 @@ handleFileUpload(file: File, cb: (url: string | null) => void) {
 }
 ```
 
-Simulate failure (for testing):
+Simulate failure:
 
 ```ts
 simulateFailingUpload(file, cb) {
@@ -237,28 +254,28 @@ simulateFailingUpload(file, cb) {
 
 ## 📘 Styles & Assets
 
-Assets are expected to be served under `/assets/richtexteditor`.  
-You **must copy** them via `angular.json` or `project.json` asset rules as explained above.
+Ensure that `/assets/richtexteditor` is correctly linked in your build config.  
+Required scripts and styles must be added (see Configuration section above).
 
 ---
 
 ## 🧪 Development & Testing Notes
 
-- Editor uses `iframe`, so DOM-based tests may require `fixture.detectChanges()` with delay.
-- Use `spyOn(service, 'setContent')` or `getContent` for mocking in unit tests.
-- Use `zone.run()` when simulating blur/focus in test specs.
+- Editor uses an `iframe`, which may need `fixture.whenStable()` or `setTimeout()` in tests.
+- Mock internal methods like `getContent()` for assertions.
+- Use `zone.run()` to manually trigger change detection if needed.
 
 ---
 
 ## 🛡️ License Key
 
-You can inject license globally or per component:
+You can inject globally:
 
 ```ts
 providers: [{ provide: RTE_LICENSE_KEY, useValue: "your-license-key" }];
 ```
 
-Or via input:
+Or pass directly to the component:
 
 ```html
 <lib-rich-text-editor [licenseKey]="'your-license-key'"></lib-rich-text-editor>
@@ -268,29 +285,31 @@ Or via input:
 
 ## 🤝 Contributing
 
-1. Clone the repo
-2. Run `npm start` to launch local playground (coming soon)
-3. Update editor or presets
-4. PR with clean commits + test coverage
+1. Fork or clone the repo
+2. Run `npm start` (once demo is available)
+3. Add new features or fix issues
+4. Submit a clean PR with a clear description
 
 ---
 
 ## 🧭 Roadmap
 
-- [ ] Playground app with demos
-- [ ] JSON-to-editor binding
-- [ ] Custom variable insertion UI
+- [ ] Interactive playground / demo
+- [ ] Storybook docs
+- [ ] JSON content support
 - [ ] Plugin registration API
+- [ ] Drag & drop blocks / content snippets
 
 ---
 
 ## 🙌 Credits
 
-- Powered by [RichTextEditor.com](https://richtexteditor.com)
-- Built with ❤️
+- Built on [RichTextEditor.com](https://richtexteditor.com)
+- Built with ❤️ and TypeScript
 
 ---
 
 ## 💬 Need Help?
 
-File an issue or start a discussion on [GitHub](https://github.com/manishpatidar028/angular-rich-text-editor)
+Start a discussion or file an issue:  
+👉 [https://github.com/manishpatidar028/angular-rich-text-editor](https://github.com/manishpatidar028/angular-rich-text-editor)
