@@ -1,8 +1,8 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RichTextEditorModule, RTE_LICENSE_KEY } from 'rich-text-editor';
-import { SharedRichTextEditorComponent } from "../components/shared-rich-text-editor/shared-rich-text-editor.component";
+import { RichTextEditorModule, RTE_LICENSE_KEY } from 'angular-rich-text-editor';
+import { SharedRichTextEditorComponent } from '../components/shared-rich-text-editor/shared-rich-text-editor.component';
 
 @Component({
   selector: 'app-rte-modal',

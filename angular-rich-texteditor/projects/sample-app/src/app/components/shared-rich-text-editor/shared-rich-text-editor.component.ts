@@ -20,13 +20,8 @@ import {
   FormsModule,
   ReactiveFormsModule,
 } from '@angular/forms';
-import {
-  RichTextEditorModule,
-  RichTextEditorService,
-  RTEImageTool,
-  RTEPreset,
-} from '../../../../../rich-text-editor/src/public-api';
-
+import { RichTextEditorModule, RichTextEditorService, RTEImageTool, RTEPreset } from 'angular-rich-text-editor';
+1
 @Component({
   selector: 'app-shared-rich-text-editor',
   standalone: true,

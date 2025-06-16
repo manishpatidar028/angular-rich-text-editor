@@ -61,8 +61,8 @@
               },
               {
                 "glob": "**/*",
-                "input": "projects/sample-app/src/assets",
-                "output": "assets"
+                "input": "node_modules/angular-rich-text-editor/src/assets/richtexteditor",
+                "output": "assets/richtexteditor"
               }
             ],
             "styles": [
