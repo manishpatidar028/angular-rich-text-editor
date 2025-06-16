@@ -197,4 +197,15 @@ export class SharedRichTextEditorComponent
     div.innerHTML = html;
     return div.textContent || '';
   }
+
+  public simulateFailingUpload = (
+  file: File,
+  callback: (url: string | null, errorCode?: string) => void
+): void => {
+  console.log('[TEST] Simulating image upload failure...');
+  setTimeout(() => {
+    callback(null, 'mock-upload-error');
+  }, 1500);
+};
+
 }

@@ -15,7 +15,7 @@ export interface RTEInstance {
 export class RichTextEditorService {
   private currentEditor: any = null; // Reference to the current RTE component
   private contentSubject = new BehaviorSubject<string>('');
-  
+
   // Observable for content changes
   public content$: Observable<string> = this.contentSubject.asObservable();
 
@@ -74,12 +74,12 @@ export class RichTextEditorService {
 
     try {
       const htmlContent = this.currentEditor.editorInstance.getHTMLCode();
-      
+
       // Handle null/undefined cases
       if (htmlContent === null || htmlContent === undefined) {
         return this.getContentFallback();
       }
-      
+
       return htmlContent;
     } catch (error) {
       console.error('[RTE Service] Failed to get content:', error);
@@ -93,7 +93,10 @@ export class RichTextEditorService {
   private getContentFallback(): string {
     try {
       // Try to get from iframe directly
-      const iframe = this.currentEditor?.editorContainer?.nativeElement?.querySelector('iframe');
+      const iframe =
+        this.currentEditor?.editorContainer?.nativeElement?.querySelector(
+          'iframe'
+        );
       if (iframe?.contentDocument?.body) {
         return iframe.contentDocument.body.innerHTML || '';
       }
@@ -121,20 +124,20 @@ export class RichTextEditorService {
 
     try {
       this.currentEditor.editorInstance.setHTMLCode(content);
-      
+
       // Ensure component state is synced
       if (this.currentEditor.value !== content) {
         this.currentEditor.value = content;
       }
-      
+
       // Trigger change event if needed
       if (this.currentEditor.onChange) {
         this.currentEditor.onChange(content);
       }
-      
+
       // Update observable
       this.contentSubject.next(content);
-      
+
       return true;
     } catch (error) {
       console.error('[RTE Service] Failed to set content:', error);
@@ -166,12 +169,15 @@ export class RichTextEditorService {
       }
 
       // Fallback to iframe focus
-      const iframe = this.currentEditor.editorContainer?.nativeElement?.querySelector('iframe');
+      const iframe =
+        this.currentEditor.editorContainer?.nativeElement?.querySelector(
+          'iframe'
+        );
       if (iframe?.contentDocument?.body) {
         iframe.contentDocument.body.focus();
         return true;
       }
-      
+
       return false;
     } catch (error) {
       console.error('[RTE Service] Failed to focus editor:', error);
@@ -196,7 +202,10 @@ export class RichTextEditorService {
       }
 
       // Fallback to iframe execCommand
-      const iframe = this.currentEditor.editorContainer?.nativeElement?.querySelector('iframe');
+      const iframe =
+        this.currentEditor.editorContainer?.nativeElement?.querySelector(
+          'iframe'
+        );
       if (iframe?.contentDocument) {
         iframe.contentDocument.execCommand(command, false, value);
         return true;
@@ -218,7 +227,10 @@ export class RichTextEditorService {
     }
 
     try {
-      const iframe = this.currentEditor.editorContainer.nativeElement.querySelector('iframe');
+      const iframe =
+        this.currentEditor.editorContainer.nativeElement.querySelector(
+          'iframe'
+        );
       if (iframe?.contentWindow) {
         const selection = iframe.contentWindow.getSelection();
         return selection ? selection.toString() : '';
@@ -235,7 +247,7 @@ export class RichTextEditorService {
    */
   isContentEmpty(): boolean {
     const content = this.getContent();
-    
+
     if (!content) return true;
 
     // Create a temporary div to parse HTML
@@ -266,7 +278,7 @@ export class RichTextEditorService {
     const div = document.createElement('div');
     div.innerHTML = content;
     const text = div.textContent?.replace(/\u00A0/g, '').trim() || '';
-    
+
     return text.length;
   }
 
@@ -280,9 +292,9 @@ export class RichTextEditorService {
     const div = document.createElement('div');
     div.innerHTML = content;
     const text = div.textContent?.replace(/\u00A0/g, '').trim() || '';
-    
+
     if (!text) return 0;
-    
+
     const words = text.match(/\b\w+\b/g);
     return words ? words.length : 0;
   }
@@ -304,5 +316,33 @@ export class RichTextEditorService {
     if (this.currentEditor?.hideAllFloatPanels) {
       this.currentEditor.hideAllFloatPanels();
     }
+  }
+
+  /**
+   * Removes the last inserted image with a temporary blob or data URL.
+   */
+  removeLastPlaceholderImage(): boolean {
+    if (!this.currentEditor) return false;
+
+    const iframe =
+      this.currentEditor?.editorContainer?.nativeElement?.querySelector(
+        'iframe'
+      );
+    const body = iframe?.contentDocument?.body;
+
+    if (!body) return false;
+
+    const images = Array.from(body.querySelectorAll('img'));
+
+    for (let i = images.length - 1; i >= 0; i--) {
+      const img = images[i] as HTMLImageElement;
+      if (img.src.startsWith('blob:') || img.src.startsWith('data:')) {
+        img.parentElement?.removeChild(img);
+        console.debug('[RTE Service] Removed temporary placeholder image.');
+        return true;
+      }
+    }
+
+    return false;
   }
 }

@@ -31,7 +31,10 @@ import {
 import { RTE_LICENSE_KEY } from './rich-text-editor-license.token';
 import { cleanToolbarString } from './utils/toolbar-cleaner';
 import { EditorEventManager } from './utils/editor-event-manager';
-import { patchRemoveChildIfDetached, safeCleanupFloatingPanels } from './utils/dom-cleanup';
+import {
+  patchRemoveChildIfDetached,
+  safeCleanupFloatingPanels,
+} from './utils/dom-cleanup';
 import { hasRequiredValidator, isTrulyEmpty } from './utils/validation-utils';
 
 declare var RichTextEditor: any;
@@ -558,7 +561,20 @@ export class RichTextEditorComponent
         optionalIndex?: number,
         optionalFiles?: File[]
       ) => {
-        this.fileUploadHandler(file, callback, optionalIndex, optionalFiles);
+        const wrappedCallback = (url: string | null, errorCode?: string) => {
+          if (!url) {
+            // 🚨 Upload failed — clean up placeholder
+            this.rteService.removeLastPlaceholderImage();
+            console.warn('[RTE] Upload failed. Placeholder removed.');
+          }
+          callback(url, errorCode);
+        };
+        this.fileUploadHandler(
+          file,
+          wrappedCallback,
+          optionalIndex,
+          optionalFiles
+        );
       },
       content_changed_callback: () => this.fixCharacterCount(),
       showFloatingToolbar: false,
