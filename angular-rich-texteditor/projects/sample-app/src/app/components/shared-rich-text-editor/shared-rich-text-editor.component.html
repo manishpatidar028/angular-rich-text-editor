@@ -17,7 +17,7 @@
         [enableVideoEmbed]="enableVideoEmbed"
         [errorMessages]="errorMessage"
         [readonly]="readOnly"
-        [fileUploadHandler]="simulateFailingUpload"
+        [fileUploadHandler]="safeUploadHandler"
         [(ngModel)]="ngModel"
         (ngModelChange)="onContentChanged($event)"
         (blur)="onBlur()"
