@@ -686,8 +686,14 @@ export class RichTextEditorComponent
     if (this.readonly || this.isDestroyed) return;
 
     try {
-      const iframe = this.editorContainer.nativeElement.querySelector('iframe');
+      if (!content || typeof content !== 'string' || !content.trim()) {
+        console.warn(
+          '[RTE] Empty or invalid content passed to insertContentAtCursor'
+        );
+        return;
+      }
 
+      const iframe = this.editorContainer.nativeElement.querySelector('iframe');
       if (!iframe?.contentWindow || !iframe.contentDocument) {
         console.warn('[RTE] iframe not found or inaccessible');
         return;
@@ -702,8 +708,39 @@ export class RichTextEditorComponent
       }
 
       editableBody.focus();
-      iframeDoc.execCommand('insertHTML', false, content);
 
+      const selection = iframe.contentWindow.getSelection();
+      if (!selection || selection.rangeCount === 0) {
+        const fallbackRange = iframeDoc.createRange();
+        fallbackRange.selectNodeContents(editableBody);
+        fallbackRange.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(fallbackRange);
+      }
+
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+
+      // ✅ Append a zero-width span to keep cursor inline
+      const enhancedContent = `${content}<span class="caret-spot">&#8203;</span>`;
+
+      // ✅ Insert as inline HTML fragment
+      const fragment = range.createContextualFragment(enhancedContent);
+      const lastNode = fragment.lastChild;
+
+      range.insertNode(fragment);
+
+      // ✅ Move caret after the inserted zero-width span
+      if (lastNode && lastNode.nodeType === Node.ELEMENT_NODE) {
+        const newRange = iframeDoc.createRange();
+        newRange.setStartAfter(lastNode);
+        newRange.setEndAfter(lastNode);
+
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+
+      // Update Angular model
       const html = this.editorInstance.getHTMLCode();
       this.value = html;
 
